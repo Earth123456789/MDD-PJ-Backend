@@ -1,0 +1,11 @@
+api:
+  insecure: true  # Enable API dashboard (use with caution in production)
+  dashboard: true  # Enable the dashboard
+
+entryPoints:
+  web:
+    address: ":80"  # Listen on port 80
+
+providers:
+  docker:  # Enable Docker as the provider
+    exposedByDefault: false  # Prevent all containers from being exposed by default

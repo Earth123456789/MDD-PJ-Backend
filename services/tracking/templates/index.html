@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>WebSocket Tracking</title>
+        <style>
+            table {
+                width: 100%;
+                margin-top: 20px;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 10px;
+                text-align: left;
+                border: 1px solid #ddd;
+            }
+            #map {
+                height: 400px;
+                width: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>WebSocket Tracking</h1>
+        <h3>Tracking Data:</h3>
+        <table id="trackingTable">
+            <thead>
+                <tr>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Order Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <script>
+            var ws = new WebSocket("ws://localhost:8000/ws");
+
+            ws.onmessage = function(event) {
+                var trackingData = JSON.parse(event.data);
+
+                // Update table
+                var table = document.getElementById('trackingTable').getElementsByTagName('tbody')[0];
+                var row = table.insertRow();
+                row.insertCell(0).textContent = trackingData.latitude.toFixed(4);
+                row.insertCell(1).textContent = trackingData.longitude.toFixed(4);
+                row.insertCell(2).textContent = trackingData.order_status;
+
+                // View on Google Maps
+                var cell = row.insertCell(3);
+                var button = document.createElement('button');
+                button.textContent = "View on Google Maps";
+                button.onclick = function() {
+                    var latitude = trackingData.latitude;
+                    var longitude = trackingData.longitude;
+                    var url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                    window.open(url, "_blank");
+                };
+                cell.appendChild(button);
+            };
+        </script>
+    </body>
+</html>

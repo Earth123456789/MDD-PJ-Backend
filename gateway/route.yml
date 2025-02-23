@@ -1,0 +1,18 @@
+  gateway:
+    image: traefik:v2.5
+    container_name: traefik
+    command:
+      - "--api.insecure=true"  # Enable Traefik dashboard
+      - "--providers.docker=true"  # Enable Docker provider
+      - "--entrypoints.web.address=:80"  # HTTP entrypoint
+      - "--providers.file.filename=/etc/traefik/route.yml"  # Path to your route.yml
+    ports:
+      - "80:80"  # Expose HTTP on port 80
+      - "8080:8080"  # Expose Traefik dashboard on port 8080
+    networks:
+      - web
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"  # Required for Docker provider
+      - "./route.yml:/etc/traefik/route.yml"  # Mount route.yml to Traefik container
+    labels:
+      - "traefik.enable=true"
