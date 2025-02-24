@@ -16,48 +16,60 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.local`)"  # Expose dashboard
 
+  auth:
+    build: ../services/auth
+    container_name: auth
+    networks:
+      - web
+    ports:
+      - "3001:3001"  
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`auth.local`)"  
+      - "traefik.http.services.auth.loadbalancer.server.port=80" 
+
+  customer:
+    build: ../services/customer
+    container_name: customer
+    networks:
+      - web
+    ports:
+      - "3002:3002"  
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.customer.rule=Host(`customer.local`) && Path(`/customer`)"  
+      - "traefik.http.services.customer.loadbalancer.server.port=80" 
+
+  delivery:
+    build: ../services/delivery
+    container_name: delivery
+    networks:
+      - web
+    ports:
+      - "3003:3003"  
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.delivery.rule=Host(`delivery.local`) && Path(`/delivery`)"  
+      - "traefik.http.services.delivery.loadbalancer.server.port=80" 
+  
   order:
     build: ../services/order
     container_name: order
     networks:
       - web
     ports:
-      - "3002:80"  # Map container port 80 to host port 3002
+      - "3004:3004"  
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.order.rule=Host(`order.local`) && Path(`/order`)"  # Correct path routing
-      - "traefik.http.services.order.loadbalancer.server.port=80"  # Internal service port
-
-  cargo:
-    build: ../services/cargo
-    container_name: cargo
-    networks:
-      - web
-    ports:
-      - "3001:80"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.cargo.rule=Host(`cargo.local`) && Path(`/cargo`)"  
-      - "traefik.http.services.cargo.loadbalancer.server.port=80" 
-
-  tracking:
-    build: ../services/tracking
-    container_name: tracking
-    networks:
-      - web
-    ports:
-      - "8000:80"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.tracking.rule=Host(`tracking.local`) && Path(`/tracking`)"  # Correct path routing
-      - "traefik.http.services.tracking.loadbalancer.server.port=80"  # Internal service port
+      - "traefik.http.routers.order.rule=Host(`order.local`) && Path(`/order`)"  
+      - "traefik.http.services.order.loadbalancer.server.port=80" 
 
   rabbitmq:
     image: rabbitmq:management
     container_name: rabbitmq
     ports:
-      - "5672:5672"  # Default RabbitMQ port for communication
-      - "15672:15672"  # Management UI
+      - "5672:5672"  
+      - "15672:15672"  
     networks:
       - web
     environment:
