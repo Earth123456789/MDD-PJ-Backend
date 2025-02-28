@@ -14,7 +14,7 @@ datasource db {
 }
 
 model Order {
-  order_id     String   @id @default(uuid())
+  order_id     Int      @id @default(autoincrement())  // Change to Int and auto-increment
   customer_id  String   
   order_date   DateTime @default(now())
   total_amount Float
@@ -25,8 +25,8 @@ model Order {
 }
 
 model OrderItem {
-  order_item_id  String   @id @default(uuid())
-  order_id       String
+  order_item_id  Int      @id @default(autoincrement())  // Change to Int and auto-increment
+  order_id       Int
   product_id     String
   quantity       Int
   price_per_unit Float
@@ -35,8 +35,8 @@ model OrderItem {
 }
 
 model Tracking {
-  tracking_id    String   @id @default(uuid())
-  order_id       String   @unique
+  tracking_id    Int      @id @default(autoincrement())  // Change to Int and auto-increment
+  order_id       Int      @unique
   latitude       Float
   longitude      Float
   tracking_status String
@@ -44,5 +44,6 @@ model Tracking {
 
   order          Order    @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
 }
+
 
 

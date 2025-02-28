@@ -3,7 +3,7 @@ import express from "express";
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 const swaggerUi = require("swagger-ui-express");
-const swaggerDocument = require("./swagger.json");
+const swaggerDocument = require("../swagger.json");
 
 const prisma = new PrismaClient();
 const app = express();
@@ -28,8 +28,9 @@ app.get("/orders", async (req, res) => {
  */
 app.get("/orders/:id", async (req, res) => {
     const { id } = req.params;
+    const orderId = parseInt(id, 10); // Convert ID to integer
     const order = await prisma.order.findUnique({
-        where: { order_id: id },
+        where: { order_id: orderId },
         include: { order_items: true },
     });
     order ? res.json(order) : res.status(404).json({ error: "Order not found" });
@@ -65,9 +66,10 @@ app.post("/orders", async (req, res) => {
 app.put("/orders/:id", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    const orderId = parseInt(id, 10); // Convert ID to integer
 
     const order = await prisma.order.update({
-        where: { order_id: id },
+        where: { order_id: orderId },
         data: { status },
     });
 
@@ -79,7 +81,8 @@ app.put("/orders/:id", async (req, res) => {
  */
 app.delete("/orders/:id", async (req, res) => {
     const { id } = req.params;
-    await prisma.order.delete({ where: { order_id: id } });
+    const orderId = parseInt(id, 10); // Convert ID to integer
+    await prisma.order.delete({ where: { order_id: orderId } });
     res.json({ message: "Order deleted" });
 });
 
@@ -88,8 +91,9 @@ app.delete("/orders/:id", async (req, res) => {
  */
 app.get("/orders/:id/items", async (req: express.Request, res: express.Response) => {
     const { id } = req.params;
+    const orderId = parseInt(id, 10); // Convert ID to integer
     const items = await prisma.orderItem.findMany({
-        where: { order_id: id },
+        where: { order_id: orderId },
     });
     res.json(items);
 });
@@ -106,14 +110,14 @@ app.get("/tracking", async (req, res) => {
     }
 });
 
-
 /**
  * GET tracking info for an order
  */
 app.get("/tracking/:order_id", async (req, res) => {
     const { order_id } = req.params;
+    const orderId = parseInt(order_id, 10); // Convert ID to integer
     const tracking = await prisma.tracking.findUnique({
-        where: { order_id },
+        where: { order_id: orderId },
     });
 
     tracking ? res.json(tracking) : res.status(404).json({ error: "Tracking not found" });
@@ -124,10 +128,11 @@ app.get("/tracking/:order_id", async (req, res) => {
  */
 app.post("/tracking", async (req, res) => {
     const { order_id, latitude, longitude, tracking_status } = req.body;
+    const orderId = parseInt(order_id, 10); // Ensure order_id is an integer
 
     try {
         const tracking = await prisma.tracking.create({
-            data: { order_id, latitude, longitude, tracking_status },
+            data: { order_id: orderId, latitude, longitude, tracking_status },
         });
 
         res.status(201).json(tracking);
@@ -142,10 +147,11 @@ app.post("/tracking", async (req, res) => {
 app.put("/tracking/:order_id", async (req, res) => {
     const { order_id } = req.params;
     const { latitude, longitude, tracking_status } = req.body;
+    const orderId = parseInt(order_id, 10); // Ensure order_id is an integer
 
     try {
         const tracking = await prisma.tracking.update({
-            where: { order_id },
+            where: { order_id: orderId },
             data: { latitude, longitude, tracking_status },
         });
 
@@ -157,8 +163,10 @@ app.put("/tracking/:order_id", async (req, res) => {
 
 app.delete("/tracking/:order_id", async (req, res) => {
     const { order_id } = req.params;
+    const orderId = parseInt(order_id, 10); // Ensure order_id is an integer
+
     try {
-        await prisma.tracking.delete({ where: { order_id } });
+        await prisma.tracking.delete({ where: { order_id: orderId } });
         res.json({ message: "Tracking deleted" });
     } catch (error) {
         res.status(404).json({ error: "Tracking not found" });
