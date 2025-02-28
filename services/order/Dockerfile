@@ -20,4 +20,4 @@ RUN npm run build
 EXPOSE 3004
 
 # Start the application
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/server.js"]
