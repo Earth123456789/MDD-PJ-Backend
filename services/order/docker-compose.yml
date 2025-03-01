@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  # Your Express App Service
+  app:
+    build: .
+    container_name: typescript-express-app
+    ports:
+      - "3004:3004" # Map port 3000 on the host to 3000 in the container
+    environment:
+      - DATABASE_URL=${DATABASE_URL} # Pass the database URL (NeonDB connection string) as an environment variable
+    env_file:
+      - .env  # Load environment variables from the .env file (which contains your NeonDB credentials)
+    volumes:
+      - .:/app  # Mount the app's source code for easy development updates
+
+  # NeonDB (Online PostgreSQL Database, we assume it is already set up)
+  # Note: No local database container since NeonDB is hosted externally

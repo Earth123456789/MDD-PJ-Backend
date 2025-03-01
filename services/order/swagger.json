@@ -1,262 +1,266 @@
 {
-    "openapi": "3.0.0",
-    "info": {
-        "title": "Order API",
-        "version": "1.0.0"
-    },
-    "servers": [
-        {
-            "url": "http://localhost:3004"
-        }
-    ],
-    "tags": [
-        {
-            "name": "Order",
-            "description": "API สำหรับจัดการ Order"
-        },
-        {
-            "name": "OrderItem",
-            "description": "API สำหรับจัดการ Order Item"
-        },
-        {
-            "name": "Tracking",
-            "description": "API สำหรับติดตามสถานะ Order"
-        }
-    ],
-    "paths": {
-        "/orders": {
-            "get": {
-                "summary": "Get all orders",
-                "tags": ["Order"],
-                "responses": {
-                    "200": {
-                        "description": "List of orders"
-                    }
-                }
-            },
-            "post": {
-                "summary": "Create a new order",
-                "tags": ["Order"],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "customer_id": { "type": "string" },
-                                    "status": { "type": "string" },
-                                    "order_items": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "product_id": { "type": "string" },
-                                                "quantity": { "type": "integer" },
-                                                "price_per_unit": { "type": "number" }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "Order created"
-                    }
-                }
-            }
-        },
-        "/orders/{id}": {
-            "get": {
-                "summary": "Get an order by ID",
-                "tags": ["Order"],
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Order details"
-                    }
-                }
-            },
-            "put": {
-                "summary": "Update an order's status",
-                "tags": ["Order"],
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "status": { "type": "string" }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Order updated"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Delete an order",
-                "tags": ["Order"],
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Order deleted"
-                    }
-                }
-            }
-        },
-        "/orders/{id}/items": {
-            "get": {
-                "summary": "Get all order items by order ID",
-                "tags": ["OrderItem"],
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of order items"
-                    }
-                }
-            }
-        },
-        "/tracking/{order_id}": {
-            "get": {
-                "summary": "Get tracking info for an order",
-                "tags": ["Tracking"],
-                "parameters": [
-                    {
-                        "name": "order_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Tracking details"
-                    }
-                }
-            },
-            "put": {
-                "summary": "Update tracking info",
-                "tags": ["Tracking"],
-                "parameters": [
-                    {
-                        "name": "order_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "latitude": { "type": "number" },
-                                    "longitude": { "type": "number" },
-                                    "tracking_status": { "type": "string" }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Tracking updated"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Delete tracking info",
-                "tags": ["Tracking"],
-                "parameters": [
-                    {
-                        "name": "order_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Tracking deleted"
-                    }
-                }
-            }
-        },
-        "/tracking": {
-            "get": {
-                "summary": "Get all tracking",
-                "tags": ["Tracking"],
-                "responses": {
-                    "200": {
-                        "description": "List of tracking"
-                    }
-                }
-            },
-            "post": {
-                "summary": "Create tracking for an order",
-                "tags": ["Tracking"],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "order_id": { "type": "string" },
-                                    "latitude": { "type": "number" },
-                                    "longitude": { "type": "number" },
-                                    "tracking_status": { "type": "string" }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "Tracking created"
-                    }
-                }
-            }
-        }
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Order API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3004"
     }
+  ],
+  "tags": [
+    {
+      "name": "Order",
+      "description": "API สำหรับจัดการ Order"
+    },
+    {
+      "name": "OrderItem",
+      "description": "API สำหรับจัดการ Order Item"
+    },
+    {
+      "name": "Tracking",
+      "description": "API สำหรับติดตามสถานะ Order"
+    }
+  ],
+  "paths": {
+    "/orders": {
+      "get": {
+        "summary": "Get all orders",
+        "tags": ["Order"],
+        "responses": {
+          "200": {
+            "description": "List of orders"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new order and send to RabbitMQ",
+        "description": "This endpoint creates a new order, saves it to the database, and sends the order details to a RabbitMQ queue for processing.",
+        "tags": ["Order"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customer_id": { "type": "string" },
+                  "status": { "type": "string" },
+                  "order_items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "product_id": { "type": "string" },
+                        "quantity": { "type": "integer" },
+                        "price_per_unit": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Order created and message sent to RabbitMQ"
+          },
+          "400": {
+            "description": "Invalid input"
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "summary": "Get an order by ID",
+        "tags": ["Order"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order details"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an order's status",
+        "tags": ["Order"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an order",
+        "tags": ["Order"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order deleted"
+          }
+        }
+      }
+    },
+    "/orders/{id}/items": {
+      "get": {
+        "summary": "Get all order items by order ID",
+        "tags": ["OrderItem"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of order items"
+          }
+        }
+      }
+    },
+    "/tracking/{order_id}": {
+      "get": {
+        "summary": "Get tracking info for an order",
+        "tags": ["Tracking"],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracking details"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update tracking info",
+        "tags": ["Tracking"],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" },
+                  "tracking_status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tracking updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete tracking info",
+        "tags": ["Tracking"],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracking deleted"
+          }
+        }
+      }
+    },
+    "/tracking": {
+      "get": {
+        "summary": "Get all tracking",
+        "tags": ["Tracking"],
+        "responses": {
+          "200": {
+            "description": "List of tracking"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create tracking for an order",
+        "tags": ["Tracking"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "order_id": { "type": "string" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" },
+                  "tracking_status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tracking created"
+          }
+        }
+      }
+    }
+  }
 }

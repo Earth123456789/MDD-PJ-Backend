@@ -1,23 +1,28 @@
-# Use an official Node.js runtime as the base image
-FROM node:18-alpine
+# Use official Node.js image as a base
+FROM node:latest
 
-# Set the working directory inside the container
+# Set working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json to install dependencies first
+# Install dependencies
 COPY package*.json ./
 
-# Install dependencies
+# Install necessary tools
+RUN apt-get update && apt-get install -y \
+  libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install npm dependencies
 RUN npm install
 
-# Copy the rest of the project files
+# Copy all files from the current directory to the container
 COPY . .
 
-# Compile TypeScript to JavaScript
-RUN npm run build
+# Run prisma generate to generate the Prisma client with the right binary target
+RUN npx prisma generate
 
 # Expose the application port
 EXPOSE 3004
 
-# Start the application
-CMD ["node", "dist/server.js"]
+# Run the application
+CMD ["npm", "start"]

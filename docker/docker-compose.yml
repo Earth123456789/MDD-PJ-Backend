@@ -1,86 +1,45 @@
-version: '3.7'
+version: '3.8'
 
 services:
-  gateway:
+  order:
     build:
-      context: ../gateway  
+      context: ../services/order
+      dockerfile: Dockerfile
+    container_name: order
+    volumes:
+      - ../services/order:/app
+    ports:
+      - "3004:3004"  
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    env_file:
+      - ../services/order/.env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.order.rule=Host(`order.localhost`)"   
+      - "traefik.http.services.order.loadbalancer.server.port=3004"  
+    networks:
+      - traefik
+
+  traefik:
+    image: traefik:latest
     container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
       - "8080:8080"
     networks:
-      - web
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock" 
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.local`)"  # Expose dashboard
-
-  auth:
-    build: ../services/auth
-    container_name: auth
-    networks:
-      - web
-    ports:
-      - "3001:3001"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.auth.rule=Host(`auth.local`)"  
-      - "traefik.http.services.auth.loadbalancer.server.port=80" 
-
-  customer:
-    build: ../services/customer
-    container_name: customer
-    networks:
-      - web
-    ports:
-      - "3002:3002"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.customer.rule=Host(`customer.local`) && Path(`/customer`)"  
-      - "traefik.http.services.customer.loadbalancer.server.port=80" 
-
-  delivery:
-    build: ../services/delivery
-    container_name: delivery
-    networks:
-      - web
-    ports:
-      - "3003:3003"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.delivery.rule=Host(`delivery.local`) && Path(`/delivery`)"  
-      - "traefik.http.services.delivery.loadbalancer.server.port=80" 
-  
-  order:
-    build: ../services/order
-    container_name: order
-    networks:
-      - web
-    ports:
-      - "3004:3004"  
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.order.rule=Host(`order.local`) && Path(`/order`)"  
-      - "traefik.http.services.order.loadbalancer.server.port=80" 
-
-  rabbitmq:
-    image: rabbitmq:management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"  
-      - "15672:15672"  
-    networks:
-      - web
-    environment:
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+      - /var/run/docker.sock:/var/run/docker.sock
+        
 
 networks:
-  web:
-    driver: bridge
-
-volumes:
-  rabbitmq-data:
+  traefik:
+    external: true  

@@ -13,6 +13,15 @@ app.use(cors());
 // Swagger setup
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+//Middleware
+app.use(
+  cors({
+      origin: '*', 
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
 /**
  * GET all orders
  */
