@@ -9,16 +9,35 @@ services:
     volumes:
       - ../services/order:/app
     ports:
-      - "3004:3004"  
+      - "3004:3004" 
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL_2}
     env_file:
       - ../services/order/.env
     labels:
       - "traefik.enable=true" 
       - "traefik.http.services.order.loadbalancer.server.port=3004"
-      - "traefik.http.routers.order.rule=Host(`order.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/tracking`) || PathPrefix(`/orders`) || PathPrefix(`/products`))"
-      
+      - "traefik.http.routers.order.rule=Host(`order.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/tracking`) || PathPrefix(`/orders`))"
+    networks:
+      - traefik
+  
+  product:
+    build:
+      context: ../services/product
+      dockerfile: Dockerfile
+    container_name: product
+    volumes:
+      - ../services/product:/app
+    ports:
+      - "3005:3005" 
+    environment:
+      - DATABASE_URL=${DATABASE_URL_1}
+    env_file:
+      - ../services/product/.env
+    labels:
+      - "traefik.enable=true" 
+      - "traefik.http.services.product.loadbalancer.server.port=3005"
+      - "traefik.http.routers.product.rule=Host(`product.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/products`))"  
     networks:
       - traefik
 
@@ -39,8 +58,7 @@ services:
       - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-        
 
 networks:
   traefik:
-    external: true  
+    external: true

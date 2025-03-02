@@ -1,85 +1,99 @@
-import { OrderStatus, PrismaClient, TrackingStatus } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { faker } from "@faker-js/faker";
+import axios from "axios";
 
 const prisma = new PrismaClient();
 
-const createMockData = async () => {
+async function main() {
+  // Generate mock orders
+  const orders = Array.from({ length: 10 }).map(() => ({
+    customer_id: faker.number.int({ min: 1, max: 100 }),
+    order_date: faker.date.recent(),
+    total_amount: parseFloat(faker.commerce.price()),
+    status: faker.helpers.arrayElement([
+      "PENDING",
+      "SHIPPED",
+      "COMPLETED",
+      "CANCELLED",
+    ]),
+  }));
 
-  const products: { id: number; name: string; description: string; price: number; stock: number; image_url: string }[] = [];
+  await prisma.order.createMany({
+    data: orders,
+  });
 
-  for (let i = 0; i < 10; i++) {
-    const product = await prisma.product.create({
-      data: {
-        name: faker.commerce.productName(),
-        description: faker.commerce.productDescription() || "", 
-        price: parseFloat(faker.commerce.price()),
-        stock: faker.number.int({ min: 10, max: 100 }),
-        image_url: faker.image.url() || "", 
+  console.log(`${orders.length} orders have been created!`);
+
+  const insertedOrders = await prisma.order.findMany({
+    where: {
+      customer_id: {
+        in: orders.map((order) => order.customer_id),
       },
-    });
-    products.push({
-      id: product.product_id, 
-      name: product.name,
-      description: product.description || "",
-      price: product.price,
-      stock: product.stock,
-      image_url: product.image_url || ""
-    });
-  }
+    },
+  });
 
-  console.log(`Created ${products.length} products`);
+  const productIds = Array.from({ length: 49 }).map(() =>
+    faker.number.int({ min: 1, max: 50 }),
+  );
+  const uniqueProductIds = Array.from(new Set(productIds));
 
-
-  for (let i = 0; i < 10; i++) {
-    const customerId = faker.string.uuid();
-
-    const orderItems: { product_id: number; quantity: number; price_per_unit: number }[] = [];
-    for (let j = 0; j < 3; j++) {
-      const product = faker.helpers.arrayElement(products);
-      orderItems.push({
-        product_id: product.id,  
-        quantity: faker.number.int({ min: 1, max: 5 }),
-        price_per_unit: product.price,
-      });
-    }
-
-
-    const totalAmount = orderItems.reduce(
-      (sum, item) => sum + item.price_per_unit * item.quantity, 
-      0
+  let products;
+  try {
+    const productResponses = await Promise.all(
+      uniqueProductIds.map((productId) =>
+        axios.get(`http://localhost:3005/products/${productId}`),
+      ),
     );
-
-
-    const order = await prisma.order.create({
-      data: {
-        customer_id: faker.number.int({ min: 1, max: 5 }),
-        total_amount: totalAmount,
-        status: faker.helpers.arrayElement(Object.values(OrderStatus)),
-        order_items: {
-          create: orderItems,
-        },
-      },
-    });
-
-    console.log(`Created order #${order.order_id} for customer ${customerId}`);
-
-
-    await prisma.tracking.create({
-      data: {
-        order_id: order.order_id,
-        latitude: faker.location.latitude(),
-        longitude: faker.location.longitude(),
-        tracking_status: faker.helpers.arrayElement(Object.values(TrackingStatus)),
-      },
-    });
-
-    console.log(`Created tracking for order #${order.order_id}`);
+    products = productResponses.map((response) => response.data);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    return;
   }
 
-  console.log("Mock data created successfully!");
-};
+  const validOrderIds: number[] = insertedOrders.map((order) => order.order_id);
 
-createMockData()
+  const orderItems = Array.from({ length: 10 }).map(() => {
+    const productId = faker.helpers.arrayElement(uniqueProductIds);
+
+    const product = products.find((prod) => prod.id === productId);
+
+    const price_per_unit = product ? product.price : 0;
+
+    return {
+      order_id: faker.helpers.arrayElement(validOrderIds) as number,
+      product_id: productId,
+      quantity: faker.number.int({ min: 1, max: 5 }),
+      price_per_unit,
+    };
+  });
+
+  for (const item of orderItems) {
+    await prisma.orderItem.create({
+      data: item,
+    });
+  }
+
+  console.log(`${orderItems.length} order items have been created!`);
+
+  const trackingData = insertedOrders.map((order) => ({
+    order_id: order.order_id,
+    latitude: parseFloat(faker.location.latitude().toString()),
+    longitude: parseFloat(faker.location.longitude().toString()),
+    tracking_status: faker.helpers.arrayElement([
+      "IN_TRANSIT",
+      "DELIVERED",
+      "CANCELLED",
+    ]),
+  }));
+
+  const insertedTracking = await prisma.tracking.createMany({
+    data: trackingData,
+  });
+
+  console.log(`${insertedTracking.count} tracking records have been created!`);
+}
+
+main()
   .catch((e) => {
     console.error(e);
     process.exit(1);

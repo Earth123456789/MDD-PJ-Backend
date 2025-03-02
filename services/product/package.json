@@ -1,5 +1,5 @@
 {
-  "name": "order",
+  "name": "product",
   "version": "1.0.0",
   "description": "1. **Set Up Your Database Connection**  \r     If you haven't already, sign up for Neon and create a PostgreSQL database.  \r     Copy the connection string from NeonDB (it looks like this):",
   "main": "index.js",
@@ -20,7 +20,6 @@
     "@types/pg": "^8.11.11",
     "@types/socket.io": "^3.0.2",
     "amqplib": "^0.10.5",
-    "axios": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
@@ -35,7 +34,7 @@
   "devDependencies": {
     "@types/amqplib": "^0.10.6",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.13.8",
+    "@types/node": "^22.13.5",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "nodemon": "^3.1.9",

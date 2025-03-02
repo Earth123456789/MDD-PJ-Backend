@@ -8,19 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Product {
-  product_id   Int     @id @default(autoincrement()) 
-  name         String
-  description  String?
-  price        Float
-  stock        Int
-  image_url    String?
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
-  order_items  OrderItem[]
-}
-
 model Order {
   order_id     Int      @id @default(autoincrement())  
   customer_id  Int  
@@ -28,22 +15,22 @@ model Order {
   total_amount Float
   status       OrderStatus @default(PENDING)   
 
-  order_items  OrderItem[]
+  order_items  OrderItem[] // The relation to OrderItem will exist here
   tracking     Tracking?
 
-  // Relation to Customer, if needed
+  // Optional: You could fetch customer info from the Customer service if needed
   // customer     Customer @relation(fields: [customer_id], references: [id]) 
 }
 
 model OrderItem {
   order_item_id  Int      @id @default(autoincrement())  
   order_id       Int
-  product_id     Int      
+  product_id     Int      // Referencing the ProductService here
   quantity       Int
   price_per_unit Float
 
   order         Order   @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
-  product       Product @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  // product       Product @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
 }
 
 model Tracking {
@@ -54,7 +41,7 @@ model Tracking {
   tracking_status TrackingStatus @default(IN_TRANSIT)
   last_update     DateTime @updatedAt
 
-  order           Order    @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  order         Order   @relation(fields: [order_id], references: [order_id])
 }
 
 enum TrackingStatus {

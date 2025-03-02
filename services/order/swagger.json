@@ -21,10 +21,6 @@
     {
       "name": "Tracking",
       "description": "API for tracking Order statuses"
-    },
-    {
-      "name": "Product",
-      "description": "API for managing Products"
     }
   ],
   "paths": {
@@ -81,7 +77,9 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -103,7 +101,9 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -130,7 +130,9 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -149,7 +151,9 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -176,7 +180,9 @@
             "name": "order_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -198,17 +204,15 @@
             "name": "order_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateTracking"
-              }
-            }
+            "application/json": {}
           }
         },
         "responses": {
@@ -225,7 +229,9 @@
             "name": "order_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -272,115 +278,6 @@
           }
         }
       }
-    },
-    "/products": {
-      "get": {
-        "summary": "Get all products",
-        "tags": ["Product"],
-        "responses": {
-          "200": {
-            "description": "List of products",
-            "content": {
-              "application/json": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Product"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new product",
-        "tags": ["Product"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewProduct"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Product created"
-          },
-          "400": {
-            "description": "Invalid input"
-          }
-        }
-      }
-    },
-    "/products/{id}": {
-      "get": {
-        "summary": "Get product details by ID",
-        "tags": ["Product"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product details",
-            "content": {
-              "application/json": {
-                "$ref": "#/components/schemas/Product"
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update product details",
-        "tags": ["Product"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProduct"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Product updated"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete a product",
-        "tags": ["Product"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product deleted"
-          }
-        }
-      }
     }
   },
   "components": {
@@ -388,94 +285,138 @@
       "Order": {
         "type": "object",
         "properties": {
-          "order_id": { "type": "string" },
-          "customer_id": { "type": "string" },
-          "total_amount": { "type": "number" },
-          "status": { "type": "string" },
-          "order_items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrderItem"
-            }
+          "order_id": {
+            "type": "integer"
+          },
+          "customer_id": {
+            "type": "integer"
+          },
+          "order_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total_amount": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
           }
         }
       },
       "NewOrder": {
         "type": "object",
         "properties": {
-          "customer_id": { "type": "string" },
-          "status": { "type": "string" },
+          "customer_id": {
+            "type": "integer"
+          },
+          "total_amount": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
+          },
           "order_items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OrderItem"
+              "$ref": "#/components/schemas/NewOrderItem"
             }
+          }
+        }
+      },
+      "NewOrderItem": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "integer"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "price_per_unit": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "UpdateOrderStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
           }
         }
       },
       "OrderItem": {
         "type": "object",
         "properties": {
-          "product_id": { "type": "string" },
-          "quantity": { "type": "integer" },
-          "price_per_unit": { "type": "number" }
-        }
-      },
-      "UpdateOrderStatus": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string" }
+          "order_item_id": {
+            "type": "integer"
+          },
+          "order_id": {
+            "type": "integer"
+          },
+          "product_id": {
+            "type": "integer"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "price_per_unit": {
+            "type": "number",
+            "format": "float"
+          }
         }
       },
       "Tracking": {
         "type": "object",
         "properties": {
-          "order_id": { "type": "string" },
-          "latitude": { "type": "number" },
-          "longitude": { "type": "number" },
-          "tracking_status": { "type": "string" }
+          "tracking_id": {
+            "type": "integer"
+          },
+          "order_id": {
+            "type": "integer"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "float"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "float"
+          },
+          "tracking_status": {
+            "type": "string",
+            "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
+          },
+          "last_update": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "NewTracking": {
         "type": "object",
         "properties": {
-          "order_id": { "type": "string" },
-          "latitude": { "type": "number" },
-          "longitude": { "type": "number" },
-          "tracking_status": { "type": "string" }
-        }
-      },
-      "UpdateTracking": {
-        "type": "object",
-        "properties": {
-          "latitude": { "type": "number" },
-          "longitude": { "type": "number" },
-          "tracking_status": { "type": "string" }
-        }
-      },
-      "Product": {
-        "type": "object",
-        "properties": {
-          "product_id": { "type": "string" },
-          "product_name": { "type": "string" },
-          "description": { "type": "string" },
-          "price": { "type": "number" }
-        }
-      },
-      "NewProduct": {
-        "type": "object",
-        "properties": {
-          "product_name": { "type": "string" },
-          "description": { "type": "string" },
-          "price": { "type": "number" }
-        }
-      },
-      "UpdateProduct": {
-        "type": "object",
-        "properties": {
-          "product_name": { "type": "string" },
-          "description": { "type": "string" },
-          "price": { "type": "number" }
+          "order_id": {
+            "type": "integer"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "float"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "float"
+          },
+          "tracking_status": {
+            "type": "string",
+            "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
+          }
         }
       }
     }
