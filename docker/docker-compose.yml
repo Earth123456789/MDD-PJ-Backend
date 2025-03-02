@@ -15,9 +15,10 @@ services:
     env_file:
       - ../services/order/.env
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.order.rule=Host(`order.localhost`)"   
-      - "traefik.http.services.order.loadbalancer.server.port=3004"  
+      - "traefik.enable=true" 
+      - "traefik.http.services.order.loadbalancer.server.port=3004"
+      - "traefik.http.routers.order.rule=Host(`order.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/tracking`) || PathPrefix(`/orders`) || PathPrefix(`/products`))"
+      
     networks:
       - traefik
 

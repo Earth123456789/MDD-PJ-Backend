@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -14,37 +8,64 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Product {
+  product_id   Int     @id @default(autoincrement()) 
+  name         String
+  description  String?
+  price        Float
+  stock        Int
+  image_url    String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  order_items  OrderItem[]
+}
+
 model Order {
-  order_id     Int      @id @default(autoincrement())  // Change to Int and auto-increment
-  customer_id  String   
+  order_id     Int      @id @default(autoincrement())  
+  customer_id  Int  
   order_date   DateTime @default(now())
   total_amount Float
-  status       String   
+  status       OrderStatus @default(PENDING)   
 
   order_items  OrderItem[]
   tracking     Tracking?
+
+  // Relation to Customer, if needed
+  // customer     Customer @relation(fields: [customer_id], references: [id]) 
 }
 
 model OrderItem {
-  order_item_id  Int      @id @default(autoincrement())  // Change to Int and auto-increment
+  order_item_id  Int      @id @default(autoincrement())  
   order_id       Int
-  product_id     String
+  product_id     Int      
   quantity       Int
   price_per_unit Float
 
   order         Order   @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  product       Product @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
 }
 
 model Tracking {
-  tracking_id    Int      @id @default(autoincrement())  // Change to Int and auto-increment
-  order_id       Int      @unique
-  latitude       Float
-  longitude      Float
-  tracking_status String
-  last_update    DateTime @updatedAt
+  tracking_id     Int      @id @default(autoincrement())  
+  order_id        Int      @unique
+  latitude        Float
+  longitude       Float
+  tracking_status TrackingStatus @default(IN_TRANSIT)
+  last_update     DateTime @updatedAt
 
-  order          Order    @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  order           Order    @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
 }
 
+enum TrackingStatus {
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
 
-
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
