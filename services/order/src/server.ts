@@ -5,11 +5,41 @@ const { PrismaClient } = require("@prisma/client");
 const swaggerUi = require("swagger-ui-express");
 const swaggerDocument = require("../swagger.json");
 import axios from "axios";
+import amqp from "amqplib";
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+// Set up RabbitMQ connection
+let channel: amqp.Channel;
+
+async function connectRabbitMQ() {
+  let retries = 5;
+  while (retries) {
+    try {
+      const connection = await amqp.connect("amqp://admin:admin@rabbitmq:5672");
+      channel = await connection.createChannel();
+      await channel.assertQueue("orderQueue", { durable: true });
+      console.log("Connected to RabbitMQ");
+      break;
+    } catch (error) {
+      console.error("Failed to connect to RabbitMQ:", error);
+      retries -= 1;
+      if (retries === 0) {
+        console.error("Unable to connect to RabbitMQ after several attempts.");
+      } else {
+        console.log(`Retrying in 5 seconds... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  }
+}
+
+
+// Call this function to connect when the app starts
+connectRabbitMQ();
 
 // Swagger setup
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -59,16 +89,31 @@ app.post("/orders", async (req, res) => {
   try {
     const orderItemsWithProductDetails = await Promise.all(
       order_items.map(async (item: { product_id: number }) => {
-        const productResponse = await axios.get(
-          `http://localhost:3005/products/${item.product_id}`
-        );
-        const product = productResponse.data;
+        try {
+          const productResponse = await axios.get(
+            // ใช้ npm run dev
+            // `http://localhost:3005/products/${item.product_id}`
+            // เดี๋ยวมาแก้ ตอน refactor
+            //  `http://product:3005/products/${item.product_id}`
+             `http://172.29.0.3:3005/products/${item.product_id}`
+          );
 
-        return {
-          ...item,
-          product, 
-        };
-      })
+
+          if (!productResponse.data) {
+            throw new Error(`Product with id ${item.product_id} not found`);
+          }
+
+          const product = productResponse.data;
+
+          return {
+            ...item,
+            product,
+          };
+        } catch (error) {
+          console.error(`Error fetching product with id ${item.product_id}:`, (error as Error).message);
+          throw new Error(`Product with id ${item.product_id} not found`);
+        }
+      }),
     );
 
     const order = await prisma.order.create({
@@ -77,71 +122,72 @@ app.post("/orders", async (req, res) => {
         total_amount,
         status,
         order_items: {
-          create: orderItemsWithProductDetails,
+          create: orderItemsWithProductDetails.map(item => ({
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_per_unit: item.price_per_unit,
+          })),
         },
       },
       include: { order_items: true },
     });
 
-    res.status(201).json(order);
+    // Publish the order creation message to RabbitMQ
+    const orderMessage = JSON.stringify(order);
+    channel.sendToQueue("orderQueue", Buffer.from(orderMessage), {
+      persistent: true, // Ensure the message is saved in case of RabbitMQ restart
+    });
+
+    res.status(201).json(order); // Return the created order
   } catch (error) {
-    console.error("Error creating order:", error);
-    res.status(500).json({ error: "Internal server error" });
+    if (error instanceof Error) {
+      console.error("Error creating order:", error.message);
+    } else {
+      console.error("Error creating order:", error);
+    }
+    res.status(500).json({ error: "Internal server error. Please check the logs." });
   }
 });
 
 // UPDATE an order status
 app.put("/orders/:id", async (req, res) => {
   const { id } = req.params;
-  const { status, order_items } = req.body; 
-
+  const { status } = req.body;
   const orderId = parseInt(id, 10);
 
   try {
-    let orderItemsWithProductDetails;
-    if (order_items) {
-      orderItemsWithProductDetails = await Promise.all(
-        order_items.map(async (item: { product_id: number }) => {
-          const productResponse = await axios.get(
-            `http://localhost:3005/products/${item.product_id}`
-          );
-          const product = productResponse.data;
-
-          return {
-            ...item,
-            product,
-          };
-        })
-      );
-    }
-
     const order = await prisma.order.update({
       where: { order_id: orderId },
-      data: {
-        status,
-        order_items: {
-          // If you're updating items as well
-          update: orderItemsWithProductDetails ? orderItemsWithProductDetails : undefined,
-        },
-      },
+      data: { status },
     });
-
     res.json(order);
   } catch (error) {
     res.status(400).json({
-      error: "Invalid order status. Valid values are: PENDING, SHIPPED, COMPLETED, CANCELLED",
+      error: "Invalid order status. Valid values are: PENDING, SHIPPED, COMPLETED, CANCELLED"
     });
   }
 });
-
 
 // DELETE an order
 app.delete("/orders/:id", async (req, res) => {
   const { id } = req.params;
   const orderId = parseInt(id, 10); // Convert ID to integer
-  await prisma.order.delete({ where: { order_id: orderId } });
-  res.json({ message: "Order deleted" });
+
+  try {
+    const deletedOrder = await prisma.order.delete({ where: { order_id: orderId } });
+
+    // Publish the order deletion message to RabbitMQ
+    const deleteMessage = JSON.stringify({ orderId });
+    channel.sendToQueue("orderQueue", Buffer.from(deleteMessage), {
+      persistent: true, // Ensure the message is saved in case of RabbitMQ restart
+    });
+
+    res.json({ message: "Order deleted", deletedOrder });
+  } catch (error) {
+    res.status(404).json({ error: "Order not found" });
+  }
 });
+
 
 // GET all order items by order ID
 app.get(
@@ -162,7 +208,7 @@ app.get(
           // Fetch product details from the Product Service via Traefik
           const productResponse = await axios.get(
             `http://product.localhost/products/${item.product_id}` ||
-              `http://localhost:3005/products/${item.product_id}`,
+            `http://localhost:3005/products/${item.product_id}`,
           );
           const product = productResponse.data;
 

@@ -20,7 +20,6 @@ COPY . .
 
 # Run prisma generate to generate the Prisma client with the right binary target
 RUN npx prisma generate
-RUN npm run seed
 
 # Expose the application port
 EXPOSE 3004
