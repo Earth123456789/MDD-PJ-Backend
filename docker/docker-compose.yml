@@ -21,25 +21,25 @@ services:
     networks:
       - traefik
   
-  product:
-    build:
-      context: ../services/product
-      dockerfile: Dockerfile
-    container_name: product
-    volumes:
-      - ../services/product:/app
-    ports:
-      - "3005:3005" 
-    environment:
-      - DATABASE_URL=${DATABASE_URL_1}
-    env_file:
-      - ../services/product/.env
-    labels:
-      - "traefik.enable=true" 
-      - "traefik.http.services.product.loadbalancer.server.port=3005"
-      - "traefik.http.routers.product.rule=Host(`product.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/products`))"  
-    networks:
-      - traefik
+  # product:
+  #   build:
+  #     context: ../services/product
+  #     dockerfile: Dockerfile
+  #   container_name: product
+  #   volumes:
+  #     - ../services/product:/app
+  #   ports:
+  #     - "3005:3005" 
+  #   environment:
+  #     - DATABASE_URL=${DATABASE_URL_1}
+  #   env_file:
+  #     - ../services/product/.env
+  #   labels:
+  #     - "traefik.enable=true" 
+  #     - "traefik.http.services.product.loadbalancer.server.port=3005"
+  #     - "traefik.http.routers.product.rule=Host(`product.localhost`) && (PathPrefix(`/docs`) || PathPrefix(`/products`))"  
+  #   networks:
+  #     - traefik
 
   traefik:
     image: traefik:latest

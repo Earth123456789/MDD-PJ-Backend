@@ -1,8 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Order API",
-    "version": "1.0.0"
+    "title": "E-Commerce API",
+    "version": "1.0.0",
+    "description": "Combined API for Products, Orders, and Tracking services"
   },
   "servers": [
     {
@@ -10,6 +11,10 @@
     }
   ],
   "tags": [
+    {
+      "name": "Product",
+      "description": "API for managing Products"
+    },
     {
       "name": "Order",
       "description": "API for managing Orders"
@@ -24,6 +29,176 @@
     }
   ],
   "paths": {
+    "/products": {
+      "get": {
+        "summary": "Get all products",
+        "tags": [
+          "Product"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch products"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new product",
+        "tags": [
+          "Product"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewProduct"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error creating product"
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "summary": "Get product details by ID",
+        "tags": [
+          "Product"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "500": {
+            "description": "Failed to fetch product"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update product details",
+        "tags": [
+          "Product"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProduct"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found or invalid data"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product",
+        "tags": [
+          "Product"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      }
+    },
     "/orders": {
       "get": {
         "summary": "Get all orders",
@@ -41,6 +216,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Failed to fetch orders"
           }
         }
       },
@@ -60,10 +238,20 @@
         },
         "responses": {
           "201": {
-            "description": "Order created and message sent to RabbitMQ"
+            "description": "Order created and message sent to RabbitMQ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid input"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -87,9 +275,17 @@
             "description": "Order details",
             "content": {
               "application/json": {
-                "$ref": "#/components/schemas/Order"
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
               }
             }
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "500": {
+            "description": "Failed to fetch order"
           }
         }
       },
@@ -118,7 +314,17 @@
         },
         "responses": {
           "200": {
-            "description": "Order updated"
+            "description": "Order updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid order status"
           }
         }
       },
@@ -137,7 +343,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Order deleted"
+            "description": "Order deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "deletedOrder": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found"
           }
         }
       }
@@ -158,15 +382,85 @@
         ],
         "responses": {
           "200": {
-            "description": "List of order items",
+            "description": "List of order items with product details",
             "content": {
               "application/json": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/OrderItem"
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/OrderItem"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "product": {
+                            "$ref": "#/components/schemas/Product"
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/tracking": {
+      "get": {
+        "summary": "Get all tracking",
+        "tags": ["Tracking"],
+        "responses": {
+          "200": {
+            "description": "List of tracking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Tracking"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch tracking data"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create tracking for an order",
+        "tags": ["Tracking"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTracking"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tracking created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tracking"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error creating tracking"
           }
         }
       }
@@ -190,9 +484,17 @@
             "description": "Tracking details",
             "content": {
               "application/json": {
-                "$ref": "#/components/schemas/Tracking"
+                "schema": {
+                  "$ref": "#/components/schemas/Tracking"
+                }
               }
             }
+          },
+          "404": {
+            "description": "Tracking not found"
+          },
+          "500": {
+            "description": "Failed to fetch tracking data"
           }
         }
       },
@@ -212,12 +514,40 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {}
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "tracking_status": {
+                    "type": "string",
+                    "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
+                  }
+                }
+              }
+            }
           }
         },
         "responses": {
           "200": {
-            "description": "Tracking updated"
+            "description": "Tracking updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tracking"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tracking not found or invalid status"
           }
         }
       },
@@ -236,45 +566,22 @@
         ],
         "responses": {
           "200": {
-            "description": "Tracking deleted"
-          }
-        }
-      }
-    },
-    "/tracking": {
-      "get": {
-        "summary": "Get all tracking",
-        "tags": ["Tracking"],
-        "responses": {
-          "200": {
-            "description": "List of tracking",
+            "description": "Tracking deleted",
             "content": {
               "application/json": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Tracking"
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create tracking for an order",
-        "tags": ["Tracking"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewTracking"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Tracking created"
+          },
+          "404": {
+            "description": "Tracking not found"
           }
         }
       }
@@ -282,6 +589,81 @@
   },
   "components": {
     "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "float"
+          },
+          "stock": {
+            "type": "integer"
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NewProduct": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "float"
+          },
+          "stock": {
+            "type": "integer"
+          },
+          "image_url": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "price"]
+      },
+      "UpdateProduct": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "float"
+          },
+          "stock": {
+            "type": "integer"
+          },
+          "image_url": {
+            "type": "string"
+          }
+        }
+      },
       "Order": {
         "type": "object",
         "properties": {
@@ -302,6 +684,12 @@
           "status": {
             "type": "string",
             "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
+          },
+          "order_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
           }
         }
       },
@@ -311,13 +699,10 @@
           "customer_id": {
             "type": "integer"
           },
-          "total_amount": {
-            "type": "number",
-            "format": "float"
-          },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
+            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"],
+            "default": "PENDING"
           },
           "order_items": {
             "type": "array",
@@ -325,7 +710,8 @@
               "$ref": "#/components/schemas/NewOrderItem"
             }
           }
-        }
+        },
+        "required": ["customer_id", "order_items"]
       },
       "NewOrderItem": {
         "type": "object",
@@ -340,7 +726,8 @@
             "type": "number",
             "format": "float"
           }
-        }
+        },
+        "required": ["product_id", "quantity", "price_per_unit"]
       },
       "UpdateOrderStatus": {
         "type": "object",
@@ -349,7 +736,8 @@
             "type": "string",
             "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
           }
-        }
+        },
+        "required": ["status"]
       },
       "OrderItem": {
         "type": "object",
@@ -417,7 +805,8 @@
             "type": "string",
             "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
           }
-        }
+        },
+        "required": ["order_id", "latitude", "longitude", "tracking_status"]
       }
     }
   }

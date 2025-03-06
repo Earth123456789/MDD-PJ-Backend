@@ -4,7 +4,6 @@ const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 const swaggerUi = require("swagger-ui-express");
 const swaggerDocument = require("../swagger.json");
-import axios from "axios";
 import amqp from "amqplib";
 
 const prisma = new PrismaClient();
@@ -37,7 +36,6 @@ async function connectRabbitMQ() {
   }
 }
 
-
 // Call this function to connect when the app starts
 connectRabbitMQ();
 
@@ -54,26 +52,105 @@ app.use(
 );
 
 /**
+ * CRUD for Products
+ */
+
+// GET all products
+app.get("/products", async (req, res) => {
+  try {
+    const products = await prisma.product.findMany();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch products" });
+  }
+});
+
+// GET a single product by ID
+app.get("/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const productId = parseInt(id, 10); 
+  try {
+    const product = await prisma.product.findUnique({
+      where: { product_id: productId },
+    });
+    product ? res.json(product) : res.status(404).json({ error: "Product not found" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch product" });
+  }
+});
+
+// CREATE a new product
+app.post("/products", async (req, res) => {
+  const { name, description, price, stock, image_url } = req.body;
+  try {
+    const newProduct = await prisma.product.create({
+      data: { name, description, price, stock, image_url },
+    });
+    res.status(201).json(newProduct);
+  } catch (error) {
+    res.status(400).json({ error: "Error creating product" });
+  }
+});
+
+// UPDATE an existing product
+app.put("/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const productId = parseInt(id, 10); 
+  const { name, description, price, stock, image_url } = req.body;
+  try {
+    const updatedProduct = await prisma.product.update({
+      where: { product_id: productId },
+      data: { name, description, price, stock, image_url },
+    });
+    res.json(updatedProduct);
+  } catch (error) {
+    res.status(404).json({ error: "Product not found or invalid data" });
+  }
+});
+
+// DELETE a product
+app.delete("/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const productId = parseInt(id, 10);
+  try {
+    await prisma.product.delete({
+      where: { product_id: productId },
+    });
+    res.json({ message: "Product deleted" });
+  } catch (error) {
+    res.status(404).json({ error: "Product not found" });
+  }
+});
+
+/**
  * CRUD for Orders and Tracking
  */
 
 // GET all orders
 app.get("/orders", async (req, res) => {
-  const orders = await prisma.order.findMany({
-    include: { order_items: true },
-  });
-  res.json(orders);
+  try {
+    const orders = await prisma.order.findMany({
+      include: { order_items: true },
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
 });
 
 // GET single order by ID
 app.get("/orders/:id", async (req, res) => {
   const { id } = req.params;
   const orderId = parseInt(id, 10);
-  const order = await prisma.order.findUnique({
-    where: { order_id: orderId },
-    include: { order_items: true },
-  });
-  order ? res.json(order) : res.status(404).json({ error: "Order not found" });
+  try {
+    const order = await prisma.order.findUnique({
+      where: { order_id: orderId },
+      include: { order_items: true },
+    });
+    order ? res.json(order) : res.status(404).json({ error: "Order not found" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
 });
 
 // CREATE a new order
@@ -90,20 +167,14 @@ app.post("/orders", async (req, res) => {
     const orderItemsWithProductDetails = await Promise.all(
       order_items.map(async (item: { product_id: number }) => {
         try {
-          const productResponse = await axios.get(
-            // ใช้ npm run dev
-            // `http://localhost:3005/products/${item.product_id}`
-            // เดี๋ยวมาแก้ ตอน refactor
-            //  `http://product:3005/products/${item.product_id}`
-             `http://172.29.0.3:3005/products/${item.product_id}`
-          );
+          // Now we can directly fetch the product from the database since we're in the same service
+          const product = await prisma.product.findUnique({
+            where: { product_id: item.product_id },
+          });
 
-
-          if (!productResponse.data) {
+          if (!product) {
             throw new Error(`Product with id ${item.product_id} not found`);
           }
-
-          const product = productResponse.data;
 
           return {
             ...item,
@@ -133,10 +204,14 @@ app.post("/orders", async (req, res) => {
     });
 
     // Publish the order creation message to RabbitMQ
-    const orderMessage = JSON.stringify(order);
-    channel.sendToQueue("orderQueue", Buffer.from(orderMessage), {
-      persistent: true, // Ensure the message is saved in case of RabbitMQ restart
-    });
+    if (channel) {
+      const orderMessage = JSON.stringify(order);
+      channel.sendToQueue("orderQueue", Buffer.from(orderMessage), {
+        persistent: true, // Ensure the message is saved in case of RabbitMQ restart
+      });
+    } else {
+      console.warn("RabbitMQ channel not available. Message not sent.");
+    }
 
     res.status(201).json(order); // Return the created order
   } catch (error) {
@@ -171,16 +246,20 @@ app.put("/orders/:id", async (req, res) => {
 // DELETE an order
 app.delete("/orders/:id", async (req, res) => {
   const { id } = req.params;
-  const orderId = parseInt(id, 10); // Convert ID to integer
+  const orderId = parseInt(id, 10);
 
   try {
     const deletedOrder = await prisma.order.delete({ where: { order_id: orderId } });
 
     // Publish the order deletion message to RabbitMQ
-    const deleteMessage = JSON.stringify({ orderId });
-    channel.sendToQueue("orderQueue", Buffer.from(deleteMessage), {
-      persistent: true, // Ensure the message is saved in case of RabbitMQ restart
-    });
+    if (channel) {
+      const deleteMessage = JSON.stringify({ orderId });
+      channel.sendToQueue("orderQueue", Buffer.from(deleteMessage), {
+        persistent: true,
+      });
+    } else {
+      console.warn("RabbitMQ channel not available. Message not sent.");
+    }
 
     res.json({ message: "Order deleted", deletedOrder });
   } catch (error) {
@@ -188,45 +267,38 @@ app.delete("/orders/:id", async (req, res) => {
   }
 });
 
-
 // GET all order items by order ID
-app.get(
-  "/orders/:id/items",
-  async (req: express.Request, res: express.Response) => {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10); // Convert ID to integer
+app.get("/orders/:id/items", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
 
-    try {
-      // Fetch Order Items from Prisma
-      const items = await prisma.orderItem.findMany({
-        where: { order_id: orderId },
-      });
+  try {
+    // Fetch Order Items from Prisma
+    const items = await prisma.orderItem.findMany({
+      where: { order_id: orderId },
+    });
 
-      // Fetch product data for each order item
-      const itemsWithProductDetails = await Promise.all(
-        items.map(async (item: { product_id: number }) => {
-          // Fetch product details from the Product Service via Traefik
-          const productResponse = await axios.get(
-            `http://product.localhost/products/${item.product_id}` ||
-            `http://localhost:3005/products/${item.product_id}`,
-          );
-          const product = productResponse.data;
+    // Fetch product data for each order item directly from database
+    const itemsWithProductDetails = await Promise.all(
+      items.map(async (item: { product_id: number }) => {
+        const product = await prisma.product.findUnique({
+          where: { product_id: item.product_id },
+        });
 
-          return {
-            ...item,
-            product,
-          };
-        }),
-      );
+        return {
+          ...item,
+          product,
+        };
+      }),
+    );
 
-      // Return the enhanced items with product details
-      res.json(itemsWithProductDetails);
-    } catch (error) {
-      console.error("Error fetching order items or product data:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  },
-);
+    // Return the enhanced items with product details
+    res.json(itemsWithProductDetails);
+  } catch (error) {
+    console.error("Error fetching order items or product data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET all tracking
 app.get("/tracking", async (req, res) => {
@@ -241,14 +313,18 @@ app.get("/tracking", async (req, res) => {
 // GET tracking info for an order
 app.get("/tracking/:order_id", async (req, res) => {
   const { order_id } = req.params;
-  const orderId = parseInt(order_id, 10); // Convert ID to integer
-  const tracking = await prisma.tracking.findUnique({
-    where: { order_id: orderId },
-  });
+  const orderId = parseInt(order_id, 10);
+  try {
+    const tracking = await prisma.tracking.findUnique({
+      where: { order_id: orderId },
+    });
 
-  tracking
-    ? res.json(tracking)
-    : res.status(404).json({ error: "Tracking not found" });
+    tracking
+      ? res.json(tracking)
+      : res.status(404).json({ error: "Tracking not found" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch tracking data" });
+  }
 });
 
 // CREATE tracking for an order

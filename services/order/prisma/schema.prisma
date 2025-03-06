@@ -1,3 +1,5 @@
+// This is the merged Prisma schema for the consolidated service
+
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -8,40 +10,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Product {
+  product_id   Int       @id @default(autoincrement())
+  name         String
+  description  String?
+  price        Float
+  stock        Int
+  image_url    String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  order_items  OrderItem[] // Relation to OrderItem
+}
+
 model Order {
-  order_id     Int      @id @default(autoincrement())  
-  customer_id  Int  
-  order_date   DateTime @default(now())
+  order_id     Int         @id @default(autoincrement())
+  customer_id  Int
+  order_date   DateTime    @default(now())
   total_amount Float
-  status       OrderStatus @default(PENDING)   
-
-  order_items  OrderItem[] // The relation to OrderItem will exist here
-  tracking     Tracking?
-
-  // Optional: You could fetch customer info from the Customer service if needed
-  // customer     Customer @relation(fields: [customer_id], references: [id]) 
+  status       OrderStatus @default(PENDING)
+  order_items  OrderItem[] // Relation to OrderItem
+  tracking     Tracking?   // Optional tracking information
 }
 
 model OrderItem {
-  order_item_id  Int      @id @default(autoincrement())  
+  order_item_id  Int      @id @default(autoincrement())
   order_id       Int
-  product_id     Int      // Referencing the ProductService here
+  product_id     Int
   quantity       Int
   price_per_unit Float
-
-  order         Order   @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
-  // product       Product @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  
+  order          Order    @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  product        Product  @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
 }
 
 model Tracking {
-  tracking_id     Int      @id @default(autoincrement())  
-  order_id        Int      @unique
+  tracking_id     Int            @id @default(autoincrement())
+  order_id        Int            @unique
   latitude        Float
   longitude       Float
   tracking_status TrackingStatus @default(IN_TRANSIT)
-  last_update     DateTime @updatedAt
-
-  order         Order   @relation(fields: [order_id], references: [order_id])
+  last_update     DateTime       @updatedAt
+  
+  order           Order          @relation(fields: [order_id], references: [order_id])
 }
 
 enum TrackingStatus {
