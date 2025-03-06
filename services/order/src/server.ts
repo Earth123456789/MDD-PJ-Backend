@@ -1,140 +1,109 @@
-require("dotenv").config();
 import express from "express";
-const cors = require("cors");
-const { PrismaClient } = require("@prisma/client");
-const swaggerUi = require("swagger-ui-express");
-const swaggerDocument = require("../swagger.json");
-import amqp from "amqplib";
+import cors from "cors";
+import { PrismaClient } from "@prisma/client";
+import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
+import swaggerDocument from "../swagger.json";
 
-const prisma = new PrismaClient();
+dotenv.config();
+
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
 const app = express();
+
 app.use(express.json());
-app.use(cors());
-
-// Set up RabbitMQ connection
-let channel: amqp.Channel;
-
-async function connectRabbitMQ() {
-  let retries = 5;
-  while (retries) {
-    try {
-      const connection = await amqp.connect("amqp://admin:admin@rabbitmq:5672");
-      channel = await connection.createChannel();
-      await channel.assertQueue("orderQueue", { durable: true });
-      console.log("Connected to RabbitMQ");
-      break;
-    } catch (error) {
-      console.error("Failed to connect to RabbitMQ:", error);
-      retries -= 1;
-      if (retries === 0) {
-        console.error("Unable to connect to RabbitMQ after several attempts.");
-      } else {
-        console.log(`Retrying in 5 seconds... (${retries} retries left)`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
-  }
-}
-
-// Call this function to connect when the app starts
-connectRabbitMQ();
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 // Swagger setup
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Middleware for CORS
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
+app.use(express.json());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Type definitions for request bodies
+interface OrderItemInput {
+  cargo_type: string;
+  weight_kg: number;
+  dimensions_cm: string;
+  special_requirements?: string;
+  item_price: number;
+  status: string;
+}
+
+interface OrderStatusHistoryInput {
+  status: string;
+  changed_at: string;
+  changed_by: number;
+  notes?: string;
+}
+
+interface PriceCalculationInput {
+  base_price: number;
+  distance_factor: number;
+  weight_factor: number;
+  urgency_factor: number;
+  final_price: number;
+}
+
+interface OrderInput {
+  customer_id: number;
+  pickup_location: string;
+  delivery_location: string;
+  requested_pickup_date: string;
+  delivery_deadline: string;
+  total_price: number;
+  status: string;
+  order_items?: OrderItemInput[];
+  order_status_history?: OrderStatusHistoryInput[];
+  price_calculations?: PriceCalculationInput[];
+}
 
 /**
- * CRUD for Products
- */
-
-// GET all products
-app.get("/products", async (req, res) => {
-  try {
-    const products = await prisma.product.findMany();
-    res.json(products);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch products" });
-  }
-});
-
-// GET a single product by ID
-app.get("/products/:id", async (req, res) => {
-  const { id } = req.params;
-  const productId = parseInt(id, 10); 
-  try {
-    const product = await prisma.product.findUnique({
-      where: { product_id: productId },
-    });
-    product ? res.json(product) : res.status(404).json({ error: "Product not found" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch product" });
-  }
-});
-
-// CREATE a new product
-app.post("/products", async (req, res) => {
-  const { name, description, price, stock, image_url } = req.body;
-  try {
-    const newProduct = await prisma.product.create({
-      data: { name, description, price, stock, image_url },
-    });
-    res.status(201).json(newProduct);
-  } catch (error) {
-    res.status(400).json({ error: "Error creating product" });
-  }
-});
-
-// UPDATE an existing product
-app.put("/products/:id", async (req, res) => {
-  const { id } = req.params;
-  const productId = parseInt(id, 10); 
-  const { name, description, price, stock, image_url } = req.body;
-  try {
-    const updatedProduct = await prisma.product.update({
-      where: { product_id: productId },
-      data: { name, description, price, stock, image_url },
-    });
-    res.json(updatedProduct);
-  } catch (error) {
-    res.status(404).json({ error: "Product not found or invalid data" });
-  }
-});
-
-// DELETE a product
-app.delete("/products/:id", async (req, res) => {
-  const { id } = req.params;
-  const productId = parseInt(id, 10);
-  try {
-    await prisma.product.delete({
-      where: { product_id: productId },
-    });
-    res.json({ message: "Product deleted" });
-  } catch (error) {
-    res.status(404).json({ error: "Product not found" });
-  }
-});
-
-/**
- * CRUD for Orders and Tracking
+ * CRUD for Orders
  */
 
 // GET all orders
 app.get("/orders", async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      include: { order_items: true },
+    // First, check database connection
+    await prisma.$connect();
+
+    const orders = await prisma.orders.findMany({
+      include: { 
+        order_items: true,
+        order_status_history: true,
+        price_calculations: true
+      }
     });
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch orders" });
+    console.error('Full error details:', error);
+    
+    // More detailed error response
+    if (error instanceof Error) {
+      res.status(500).json({ 
+        error: "Failed to fetch orders", 
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    } else {
+      res.status(500).json({ 
+        error: "Failed to fetch orders", 
+        details: "Unknown error occurred" 
+      });
+    }
+  } finally {
+    // Ensure database connection is closed
+    await prisma.$disconnect();
   }
 });
 
@@ -142,12 +111,20 @@ app.get("/orders", async (req, res) => {
 app.get("/orders/:id", async (req, res) => {
   const { id } = req.params;
   const orderId = parseInt(id, 10);
+  
   try {
-    const order = await prisma.order.findUnique({
+    const order = await prisma.orders.findUnique({
       where: { order_id: orderId },
-      include: { order_items: true },
+      include: { 
+        order_items: true,
+        order_status_history: true,
+        price_calculations: true
+      }
     });
-    order ? res.json(order) : res.status(404).json({ error: "Order not found" });
+    
+    order 
+      ? res.json(order) 
+      : res.status(404).json({ error: "Order not found" });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch order" });
   }
@@ -155,91 +132,109 @@ app.get("/orders/:id", async (req, res) => {
 
 // CREATE a new order
 app.post("/orders", async (req, res) => {
-  const { customer_id, order_items, status } = req.body;
-
-  const total_amount = order_items.reduce(
-    (acc: number, item: { quantity: number; price_per_unit: number }) =>
-      acc + item.quantity * item.price_per_unit,
-    0,
-  );
+  const { 
+    customer_id, 
+    pickup_location, 
+    delivery_location, 
+    requested_pickup_date, 
+    delivery_deadline,
+    total_price,
+    status,
+    order_items,
+    order_status_history,
+    price_calculations
+  }: OrderInput = req.body;
 
   try {
-    const orderItemsWithProductDetails = await Promise.all(
-      order_items.map(async (item: { product_id: number }) => {
-        try {
-          // Now we can directly fetch the product from the database since we're in the same service
-          const product = await prisma.product.findUnique({
-            where: { product_id: item.product_id },
-          });
-
-          if (!product) {
-            throw new Error(`Product with id ${item.product_id} not found`);
-          }
-
-          return {
-            ...item,
-            product,
-          };
-        } catch (error) {
-          console.error(`Error fetching product with id ${item.product_id}:`, (error as Error).message);
-          throw new Error(`Product with id ${item.product_id} not found`);
-        }
-      }),
-    );
-
-    const order = await prisma.order.create({
+    const order = await prisma.orders.create({
       data: {
-        customer_id,
-        total_amount,
+        customer_id: customer_id,
+        pickup_location,
+        delivery_location,
+        requested_pickup_date: new Date(requested_pickup_date),
+        delivery_deadline: new Date(delivery_deadline),
+        total_price,
         status,
         order_items: {
-          create: orderItemsWithProductDetails.map(item => ({
-            product_id: item.product_id,
-            quantity: item.quantity,
-            price_per_unit: item.price_per_unit,
-          })),
+          create: order_items?.map((item: OrderItemInput) => ({
+            cargo_type: item.cargo_type,
+            weight_kg: item.weight_kg,
+            dimensions_cm: item.dimensions_cm,
+            special_requirements: item.special_requirements,
+            item_price: item.item_price,
+            status: item.status
+          })) || []
         },
+        order_status_history: {
+          create: order_status_history?.map((history: OrderStatusHistoryInput) => ({
+            status: history.status,
+            changed_at: new Date(history.changed_at),
+            changed_by: history.changed_by,
+            notes: history.notes
+          })) || []
+        },
+        price_calculations: {
+          create: price_calculations?.map((calc: PriceCalculationInput) => ({
+            base_price: calc.base_price,
+            distance_factor: calc.distance_factor,
+            weight_factor: calc.weight_factor,
+            urgency_factor: calc.urgency_factor,
+            final_price: calc.final_price
+          })) || []
+        }
       },
-      include: { order_items: true },
+      include: {
+        order_items: true,
+        order_status_history: true,
+        price_calculations: true
+      }
     });
 
-    // Publish the order creation message to RabbitMQ
-    if (channel) {
-      const orderMessage = JSON.stringify(order);
-      channel.sendToQueue("orderQueue", Buffer.from(orderMessage), {
-        persistent: true, // Ensure the message is saved in case of RabbitMQ restart
-      });
-    } else {
-      console.warn("RabbitMQ channel not available. Message not sent.");
-    }
-
-    res.status(201).json(order); // Return the created order
+    res.status(201).json(order);
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("Error creating order:", error.message);
-    } else {
-      console.error("Error creating order:", error);
-    }
-    res.status(500).json({ error: "Internal server error. Please check the logs." });
+    console.error("Error creating order:", error);
+    res.status(500).json({ error: "Internal server error", details: error });
   }
 });
 
-// UPDATE an order status
+// UPDATE an order
 app.put("/orders/:id", async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
   const orderId = parseInt(id, 10);
+  
+  const { 
+    customer_id, 
+    pickup_location, 
+    delivery_location, 
+    requested_pickup_date, 
+    delivery_deadline,
+    total_price,
+    status
+  }: Partial<OrderInput> = req.body;
 
   try {
-    const order = await prisma.order.update({
+    const updatedOrder = await prisma.orders.update({
       where: { order_id: orderId },
-      data: { status },
+      data: {
+        ...(customer_id && { customer_id }),
+        ...(pickup_location && { pickup_location }),
+        ...(delivery_location && { delivery_location }),
+        ...(requested_pickup_date && { requested_pickup_date: new Date(requested_pickup_date) }),
+        ...(delivery_deadline && { delivery_deadline: new Date(delivery_deadline) }),
+        ...(total_price && { total_price }),
+        ...(status && { status })
+      },
+      include: {
+        order_items: true,
+        order_status_history: true,
+        price_calculations: true
+      }
     });
-    res.json(order);
+
+    res.json(updatedOrder);
   } catch (error) {
-    res.status(400).json({
-      error: "Invalid order status. Valid values are: PENDING, SHIPPED, COMPLETED, CANCELLED"
-    });
+    console.error("Error updating order:", error);
+    res.status(400).json({ error: "Failed to update order" });
   }
 });
 
@@ -249,138 +244,184 @@ app.delete("/orders/:id", async (req, res) => {
   const orderId = parseInt(id, 10);
 
   try {
-    const deletedOrder = await prisma.order.delete({ where: { order_id: orderId } });
+    // Delete related records first due to foreign key constraints
+    await prisma.order_status_history.deleteMany({
+      where: { order_id: orderId }
+    });
+    
+    await prisma.price_calculations.deleteMany({
+      where: { order_id: orderId }
+    });
+    
+    await prisma.order_items.deleteMany({
+      where: { order_id: orderId }
+    });
 
-    // Publish the order deletion message to RabbitMQ
-    if (channel) {
-      const deleteMessage = JSON.stringify({ orderId });
-      channel.sendToQueue("orderQueue", Buffer.from(deleteMessage), {
-        persistent: true,
-      });
-    } else {
-      console.warn("RabbitMQ channel not available. Message not sent.");
-    }
+    // Then delete the order
+    const deletedOrder = await prisma.orders.delete({
+      where: { order_id: orderId }
+    });
 
     res.json({ message: "Order deleted", deletedOrder });
   } catch (error) {
+    console.error("Error deleting order:", error);
     res.status(404).json({ error: "Order not found" });
   }
 });
 
-// GET all order items by order ID
+/**
+ * Routes for Order Items
+ */
+
+// GET order items for a specific order
 app.get("/orders/:id/items", async (req, res) => {
   const { id } = req.params;
   const orderId = parseInt(id, 10);
 
   try {
-    // Fetch Order Items from Prisma
-    const items = await prisma.orderItem.findMany({
-      where: { order_id: orderId },
+    const items = await prisma.order_items.findMany({
+      where: { order_id: orderId }
     });
 
-    // Fetch product data for each order item directly from database
-    const itemsWithProductDetails = await Promise.all(
-      items.map(async (item: { product_id: number }) => {
-        const product = await prisma.product.findUnique({
-          where: { product_id: item.product_id },
-        });
-
-        return {
-          ...item,
-          product,
-        };
-      }),
-    );
-
-    // Return the enhanced items with product details
-    res.json(itemsWithProductDetails);
+    res.json(items);
   } catch (error) {
-    console.error("Error fetching order items or product data:", error);
+    console.error("Error fetching order items:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET all tracking
-app.get("/tracking", async (req, res) => {
+// ADD/UPDATE order items
+app.post("/orders/:id/items", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
+  const items: OrderItemInput[] = req.body;
+
   try {
-    const tracking = await prisma.tracking.findMany();
-    res.json(tracking);
+    const createdItems = await Promise.all(
+      items.map((item: OrderItemInput) => 
+        prisma.order_items.create({
+          data: {
+            order_id: orderId,
+            cargo_type: item.cargo_type,
+            weight_kg: item.weight_kg,
+            dimensions_cm: item.dimensions_cm,
+            special_requirements: item.special_requirements,
+            item_price: item.item_price,
+            status: item.status
+          }
+        })
+      )
+    );
+
+    res.status(201).json(createdItems);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch tracking data" });
+    console.error("Error adding order items:", error);
+    res.status(400).json({ error: "Failed to add order items" });
   }
 });
 
-// GET tracking info for an order
-app.get("/tracking/:order_id", async (req, res) => {
-  const { order_id } = req.params;
-  const orderId = parseInt(order_id, 10);
+/**
+ * Routes for Order Status History
+ */
+
+// GET status history for a specific order
+app.get("/orders/:id/status-history", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
+
   try {
-    const tracking = await prisma.tracking.findUnique({
-      where: { order_id: orderId },
+    const statusHistory = await prisma.order_status_history.findMany({
+      where: { order_id: orderId }
     });
 
-    tracking
-      ? res.json(tracking)
-      : res.status(404).json({ error: "Tracking not found" });
+    res.json(statusHistory);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch tracking data" });
+    console.error("Error fetching status history:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// CREATE tracking for an order
-app.post("/tracking", async (req, res) => {
-  const { order_id, latitude, longitude, tracking_status } = req.body;
-  const orderId = parseInt(order_id, 10);
+// ADD status history entry
+app.post("/orders/:id/status-history", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
+  const { status, changed_by, notes }: OrderStatusHistoryInput = req.body;
 
   try {
-    const tracking = await prisma.tracking.create({
-      data: { order_id: orderId, latitude, longitude, tracking_status },
+    const statusEntry = await prisma.order_status_history.create({
+      data: {
+        order_id: orderId,
+        status,
+        changed_at: new Date(),
+        changed_by: changed_by,
+        notes
+      }
     });
 
-    res.status(201).json(tracking);
+    res.status(201).json(statusEntry);
   } catch (error) {
-    res
-      .status(400)
-      .json({ error: "Error creating tracking. Ensure order_id exists." });
+    console.error("Error adding status history:", error);
+    res.status(400).json({ error: "Failed to add status history" });
   }
 });
 
-// UPDATE tracking status and location
-app.put("/tracking/:order_id", async (req, res) => {
-  const { order_id } = req.params;
-  const { latitude, longitude, tracking_status } = req.body;
-  const orderId = parseInt(order_id, 10);
+/**
+ * Routes for Price Calculations
+ */
+
+// GET price calculations for a specific order
+app.get("/orders/:id/price-calculations", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
 
   try {
-    const tracking = await prisma.tracking.update({
-      where: { order_id: orderId },
-      data: { latitude, longitude, tracking_status },
+    const priceCalculations = await prisma.price_calculations.findMany({
+      where: { order_id: orderId }
     });
 
-    res.json(tracking);
+    res.json(priceCalculations);
   } catch (error) {
-    res.status(404).json({
-      error:
-        "Tracking not found or invalid status. Valid values are: IN_TRANSIT, DELIVERED, CANCELLED",
-    });
+    console.error("Error fetching price calculations:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// DELETE tracking for an order
-app.delete("/tracking/:order_id", async (req, res) => {
-  const { order_id } = req.params;
-  const orderId = parseInt(order_id, 10);
+// ADD price calculation entry
+app.post("/orders/:id/price-calculations", async (req, res) => {
+  const { id } = req.params;
+  const orderId = parseInt(id, 10);
+  const { 
+    base_price, 
+    distance_factor, 
+    weight_factor, 
+    urgency_factor, 
+    final_price 
+  }: PriceCalculationInput = req.body;
 
   try {
-    await prisma.tracking.delete({ where: { order_id: orderId } });
-    res.json({ message: "Tracking deleted" });
+    const priceCalculation = await prisma.price_calculations.create({
+      data: {
+        order_id: orderId,
+        base_price,
+        distance_factor,
+        weight_factor,
+        urgency_factor,
+        final_price
+      }
+    });
+
+    res.status(201).json(priceCalculation);
   } catch (error) {
-    res.status(404).json({ error: "Tracking not found" });
+    console.error("Error adding price calculation:", error);
+    res.status(400).json({ error: "Failed to add price calculation" });
   }
 });
 
 // Start the server
-app.listen(3004, () => {
-  console.log("Server is running on http://localhost:3004");
-  console.log("Swagger docs available at http://localhost:3004/docs");
+const PORT = process.env.PORT || 3004;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`See Document API at http://localhost:${PORT}/docs`);
 });
+
+export default app;

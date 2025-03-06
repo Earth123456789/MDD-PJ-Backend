@@ -1,211 +1,24 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "E-Commerce API",
+    "title": "Logistics Order Management API",
     "version": "1.0.0",
-    "description": "Combined API for Products, Orders, and Tracking services"
+    "description": "API for managing logistics orders, items, status history, and price calculations"
   },
   "servers": [
     {
-      "url": "http://localhost:3004"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Product",
-      "description": "API for managing Products"
-    },
-    {
-      "name": "Order",
-      "description": "API for managing Orders"
-    },
-    {
-      "name": "OrderItem",
-      "description": "API for managing Order Items"
-    },
-    {
-      "name": "Tracking",
-      "description": "API for tracking Order statuses"
+      "url": "http://localhost:3004",
+      "description": "Local development server"
     }
   ],
   "paths": {
-    "/products": {
-      "get": {
-        "summary": "Get all products",
-        "tags": [
-          "Product"
-        ],
-        "responses": {
-          "200": {
-            "description": "List of products",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Product"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch products"
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new product",
-        "tags": [
-          "Product"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewProduct"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Product created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Product"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error creating product"
-          }
-        }
-      }
-    },
-    "/products/{id}": {
-      "get": {
-        "summary": "Get product details by ID",
-        "tags": [
-          "Product"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Product"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Product not found"
-          },
-          "500": {
-            "description": "Failed to fetch product"
-          }
-        }
-      },
-      "put": {
-        "summary": "Update product details",
-        "tags": [
-          "Product"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProduct"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Product updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Product"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Product not found or invalid data"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete a product",
-        "tags": [
-          "Product"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Product not found"
-          }
-        }
-      }
-    },
     "/orders": {
       "get": {
-        "summary": "Get all orders",
-        "tags": ["Order"],
+        "summary": "Retrieve all orders",
+        "description": "Fetches a list of all orders with their associated items, status history, and price calculations",
         "responses": {
           "200": {
-            "description": "List of orders",
+            "description": "Successful retrieval of orders",
             "content": {
               "application/json": {
                 "schema": {
@@ -218,370 +31,36 @@
             }
           },
           "500": {
-            "description": "Failed to fetch orders"
+            "description": "Internal server error"
           }
         }
       },
       "post": {
-        "summary": "Create a new order and send to RabbitMQ",
-        "description": "This endpoint creates a new order, saves it to the database, and sends the order details to a RabbitMQ queue for processing.",
-        "tags": ["Order"],
+        "summary": "Create a new order",
+        "description": "Creates a new order with optional order items, status history, and price calculations",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewOrder"
+                "$ref": "#/components/schemas/OrderInput"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Order created and message sent to RabbitMQ",
+            "description": "Order created successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Order"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/orders/{id}": {
-      "get": {
-        "summary": "Get an order by ID",
-        "tags": ["Order"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Order details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Order"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Order not found"
-          },
-          "500": {
-            "description": "Failed to fetch order"
-          }
-        }
-      },
-      "put": {
-        "summary": "Update an order's status",
-        "tags": ["Order"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateOrderStatus"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Order updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Order"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid order status"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete an order",
-        "tags": ["Order"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Order deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "deletedOrder": {
-                      "$ref": "#/components/schemas/Order"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Order not found"
-          }
-        }
-      }
-    },
-    "/orders/{id}/items": {
-      "get": {
-        "summary": "Get all order items by order ID",
-        "tags": ["OrderItem"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of order items with product details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/OrderItem"
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "product": {
-                            "$ref": "#/components/schemas/Product"
-                          }
-                        }
-                      }
-                    ]
-                  }
                 }
               }
             }
           },
           "500": {
             "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/tracking": {
-      "get": {
-        "summary": "Get all tracking",
-        "tags": ["Tracking"],
-        "responses": {
-          "200": {
-            "description": "List of tracking",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Tracking"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Failed to fetch tracking data"
-          }
-        }
-      },
-      "post": {
-        "summary": "Create tracking for an order",
-        "tags": ["Tracking"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewTracking"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Tracking created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tracking"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error creating tracking"
-          }
-        }
-      }
-    },
-    "/tracking/{order_id}": {
-      "get": {
-        "summary": "Get tracking info for an order",
-        "tags": ["Tracking"],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Tracking details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tracking"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Tracking not found"
-          },
-          "500": {
-            "description": "Failed to fetch tracking data"
-          }
-        }
-      },
-      "put": {
-        "summary": "Update tracking info",
-        "tags": ["Tracking"],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "latitude": {
-                    "type": "number",
-                    "format": "float"
-                  },
-                  "longitude": {
-                    "type": "number",
-                    "format": "float"
-                  },
-                  "tracking_status": {
-                    "type": "string",
-                    "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Tracking updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tracking"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Tracking not found or invalid status"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete tracking info",
-        "tags": ["Tracking"],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Tracking deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Tracking not found"
           }
         }
       }
@@ -589,83 +68,18 @@
   },
   "components": {
     "schemas": {
-      "Product": {
-        "type": "object",
-        "properties": {
-          "product_id": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "price": {
-            "type": "number",
-            "format": "float"
-          },
-          "stock": {
-            "type": "integer"
-          },
-          "image_url": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "NewProduct": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "price": {
-            "type": "number",
-            "format": "float"
-          },
-          "stock": {
-            "type": "integer"
-          },
-          "image_url": {
-            "type": "string"
-          }
-        },
-        "required": ["name", "price"]
-      },
-      "UpdateProduct": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "price": {
-            "type": "number",
-            "format": "float"
-          },
-          "stock": {
-            "type": "integer"
-          },
-          "image_url": {
-            "type": "string"
-          }
-        }
-      },
       "Order": {
         "type": "object",
+        "required": [
+          "order_id",
+          "customer_id",
+          "pickup_location",
+          "delivery_location",
+          "requested_pickup_date",
+          "delivery_deadline",
+          "total_price",
+          "status"
+        ],
         "properties": {
           "order_id": {
             "type": "integer"
@@ -673,140 +87,329 @@
           "customer_id": {
             "type": "integer"
           },
-          "order_date": {
+          "pickup_location": {
+            "type": "string"
+          },
+          "delivery_location": {
+            "type": "string"
+          },
+          "requested_pickup_date": {
             "type": "string",
             "format": "date-time"
           },
-          "total_amount": {
+          "delivery_deadline": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total_price": {
             "type": "number",
             "format": "float"
           },
           "status": {
-            "type": "string",
-            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
+            "type": "string"
           },
           "order_items": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrderItem"
             }
+          },
+          "order_status_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderStatusHistory"
+            }
+          },
+          "price_calculations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceCalculation"
+            }
           }
         }
       },
-      "NewOrder": {
+      "OrderItem": {
+        "type": "object",
+        "required": [
+          "item_id",
+          "order_id",
+          "cargo_type",
+          "weight_kg",
+          "dimensions_cm",
+          "item_price",
+          "status"
+        ],
+        "properties": {
+          "item_id": {
+            "type": "integer"
+          },
+          "order_id": {
+            "type": "integer"
+          },
+          "cargo_type": {
+            "type": "string"
+          },
+          "weight_kg": {
+            "type": "number",
+            "format": "float"
+          },
+          "dimensions_cm": {
+            "type": "string"
+          },
+          "special_requirements": {
+            "type": "string"
+          },
+          "item_price": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderItemInput": {
+        "type": "object",
+        "required": [
+          "cargo_type",
+          "weight_kg",
+          "dimensions_cm",
+          "item_price",
+          "status"
+        ],
+        "properties": {
+          "cargo_type": {
+            "type": "string"
+          },
+          "weight_kg": {
+            "type": "number",
+            "format": "float"
+          },
+          "dimensions_cm": {
+            "type": "string"
+          },
+          "special_requirements": {
+            "type": "string"
+          },
+          "item_price": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderStatusHistory": {
+        "type": "object",
+        "required": [
+          "history_id",
+          "order_id",
+          "status",
+          "changed_at",
+          "changed_by"
+        ],
+        "properties": {
+          "history_id": {
+            "type": "integer"
+          },
+          "order_id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changed_by": {
+            "type": "integer"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderStatusHistoryInput": {
+        "type": "object",
+        "required": [
+          "status",
+          "changed_at",
+          "changed_by"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changed_by": {
+            "type": "integer"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderInput": {
+        "type": "object",
+        "required": [
+          "customer_id",
+          "pickup_location",
+          "delivery_location",
+          "requested_pickup_date",
+          "delivery_deadline",
+          "total_price",
+          "status"
+        ],
+        "properties": {
+          "customer_id": {
+            "type": "integer"
+          },
+          "pickup_location": {
+            "type": "string"
+          },
+          "delivery_location": {
+            "type": "string"
+          },
+          "requested_pickup_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "delivery_deadline": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total_price": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string"
+          },
+          "order_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemInput"
+            }
+          },
+          "order_status_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderStatusHistoryInput"
+            }
+          },
+          "price_calculations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceCalculationInput"
+            }
+          }
+        }
+      },
+      "OrderUpdateInput": {
         "type": "object",
         "properties": {
           "customer_id": {
             "type": "integer"
           },
-          "status": {
-            "type": "string",
-            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"],
-            "default": "PENDING"
+          "pickup_location": {
+            "type": "string"
           },
-          "order_items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NewOrderItem"
-            }
-          }
-        },
-        "required": ["customer_id", "order_items"]
-      },
-      "NewOrderItem": {
-        "type": "object",
-        "properties": {
-          "product_id": {
-            "type": "integer"
+          "delivery_location": {
+            "type": "string"
           },
-          "quantity": {
-            "type": "integer"
-          },
-          "price_per_unit": {
-            "type": "number",
-            "format": "float"
-          }
-        },
-        "required": ["product_id", "quantity", "price_per_unit"]
-      },
-      "UpdateOrderStatus": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": ["PENDING", "SHIPPED", "COMPLETED", "CANCELLED"]
-          }
-        },
-        "required": ["status"]
-      },
-      "OrderItem": {
-        "type": "object",
-        "properties": {
-          "order_item_id": {
-            "type": "integer"
-          },
-          "order_id": {
-            "type": "integer"
-          },
-          "product_id": {
-            "type": "integer"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "price_per_unit": {
-            "type": "number",
-            "format": "float"
-          }
-        }
-      },
-      "Tracking": {
-        "type": "object",
-        "properties": {
-          "tracking_id": {
-            "type": "integer"
-          },
-          "order_id": {
-            "type": "integer"
-          },
-          "latitude": {
-            "type": "number",
-            "format": "float"
-          },
-          "longitude": {
-            "type": "number",
-            "format": "float"
-          },
-          "tracking_status": {
-            "type": "string",
-            "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
-          },
-          "last_update": {
+          "requested_pickup_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "delivery_deadline": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total_price": {
+            "type": "number",
+            "format": "float"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },
-      "NewTracking": {
+      "PriceCalculation": {
         "type": "object",
+        "required": [
+          "calculation_id",
+          "order_id",
+          "base_price",
+          "distance_factor",
+          "weight_factor",
+          "urgency_factor",
+          "final_price"
+        ],
         "properties": {
+          "calculation_id": {
+            "type": "integer"
+          },
           "order_id": {
             "type": "integer"
           },
-          "latitude": {
+          "base_price": {
             "type": "number",
             "format": "float"
           },
-          "longitude": {
+          "distance_factor": {
             "type": "number",
             "format": "float"
           },
-          "tracking_status": {
-            "type": "string",
-            "enum": ["IN_TRANSIT", "DELIVERED", "CANCELLED"]
+          "weight_factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "urgency_factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "final_price": {
+            "type": "number",
+            "format": "float"
           }
-        },
-        "required": ["order_id", "latitude", "longitude", "tracking_status"]
+        }
+      },
+      "PriceCalculationInput": {
+        "type": "object",
+        "required": [
+          "base_price",
+          "distance_factor",
+          "weight_factor",
+          "urgency_factor",
+          "final_price"
+        ],
+        "properties": {
+          "base_price": {
+            "type": "number",
+            "format": "float"
+          },
+          "distance_factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "weight_factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "urgency_factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "final_price": {
+            "type": "number",
+            "format": "float"
+          }
+        }
       }
     }
   }
