@@ -36,15 +36,16 @@ const logger = winston.createLogger({
   ]
 });
 
-// Add stream for Morgan HTTP logger
-interface LoggerStream {
+// แก้ไขส่วนนี้
+interface StreamOptions {
   write(message: string): void;
 }
 
-const stream: LoggerStream = {
-  write: (message: string) => logger.info(message.trim())
+// ไม่ใช้ logger.stream โดยตรง แต่ export function ที่รวม logger และ stream logic
+export const logStream: StreamOptions = {
+  write: (message: string) => {
+    logger.info(message.trim());
+  }
 };
-
-logger.stream = stream;
 
 export default logger;

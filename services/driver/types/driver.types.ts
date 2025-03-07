@@ -1,4 +1,4 @@
-import { Driver, DriverStatus, VerificationStatus } from '@prisma/client';
+import { Driver, DriverStatus, VerificationStatus } from '.prisma/client';
 
 export interface DriverInput {
   firstName: string;

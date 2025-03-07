@@ -5,7 +5,7 @@ import cors from 'cors';
 import compression from 'compression';
 import routes from './routes';
 import errorHandler from './middlewares/errorHandler';
-import logger from './utils/logger';
+import logger, { logStream } from './utils/logger';
 
 // Create Express application
 const app: Application = express();
@@ -16,7 +16,7 @@ app.use(compression()); // Compress responses
 app.use(cors()); // Enable CORS
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request body
-app.use(morgan('combined', { stream: logger.stream })); // HTTP request logging
+app.use(morgan('combined', { stream: logStream })); // HTTP request logging
 
 // API Routes
 app.use('/api/v1/drivers', routes);

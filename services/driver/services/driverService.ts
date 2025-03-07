@@ -1,4 +1,4 @@
-import { PrismaClient, Driver, DriverStatus } from '@prisma/client';
+import { PrismaClient, Driver, DriverStatus } from '.prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { 

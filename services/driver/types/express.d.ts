@@ -1,4 +1,4 @@
-import { Driver } from '@prisma/client';
+import { Driver } from '.prisma/client';
 import { Request } from 'express';
 
 declare global {

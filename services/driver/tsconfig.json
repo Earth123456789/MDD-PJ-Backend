@@ -3,7 +3,7 @@
       "target": "ES2021",
       "module": "commonjs",
       "outDir": "./dist",
-      "rootDir": "./src",
+      "rootDir": ".", // แก้จาก "./src" เป็น "." ถ้าไฟล์ .ts อยู่ในหลายโฟลเดอร์
       "strict": true,
       "esModuleInterop": true,
       "skipLibCheck": true,
@@ -30,6 +30,8 @@
       },
       "typeRoots": ["./node_modules/@types", "./src/types"]
     },
-    "include": ["src/**/*"],
+    "include": [
+      "**/*.ts" // แก้จาก "src/**/*" เป็น "**/*.ts" เพื่อรวมไฟล์ทั้งหมด
+    ],
     "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
   }
