@@ -1,42 +1,144 @@
-# Set Up Your Database Connection
+# FastAPI Order Management Service
 
-1. **Generate the Migration**  
-   Run the following command to create and apply migrations:
+A robust REST API for order management with PostgreSQL database, RabbitMQ for messaging, and Tortoise ORM.
 
-   ```sh
-   npx prisma migrate dev --name init_neon_migration
-   ```
+## Features
 
-   This creates a new migration file and applies it to the NeonDB database.
+- Complete CRUD operations for orders and order items
+- Order status tracking with history
+- Price calculation based on weight, distance, and urgency
+- RabbitMQ integration for event-driven architecture
+- Swagger documentation
+- Containerized with Docker and Docker Compose
+- Comprehensive test suite
 
-2. **Update Prisma Client**  
-   After migrating, update Prisma Client so your application recognizes the changes:
+## Project Structure
 
-   ```sh
-   npx prisma generate
-   ```
+```
+order-management-service/
+├── config/
+│   ├── __init__.py
+│   ├── config.py
+│   └── rabbitmq.py
+├── controller/
+│   ├── __init__.py
+│   └── order_controller.py
+├── data/
+│   └── init.sql
+├── models/
+│   └── models.py
+├── routes/
+│   ├── __init__.py
+│   └── order_routes.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_controller.py
+│   └── test_orders.py
+├── .env.example
+├── docker-compose.yml
+├── Dockerfile
+├── main.py
+├── requirements.txt
+├── schemas.py
+└── README.md
+```
 
-3. **Verify Migration**  
-   To check if everything is applied correctly, use Prisma Studio:
+## API Endpoints
 
-   ```sh
-   npx prisma studio
-   ```
+- `GET /api/v1/orders` - List all orders with pagination and filters
+- `POST /api/v1/orders` - Create a new order
+- `GET /api/v1/orders/{order_id}` - Get order details by ID
+- `PUT /api/v1/orders/{order_id}` - Update order details
+- `DELETE /api/v1/orders/{order_id}` - Delete an order
+- `PUT /api/v1/orders/{order_id}/status` - Update order status
+- `POST /api/v1/orders/{order_id}/calculate-price` - Calculate order price
+- `GET /api/v1/orders/{order_id}/price-history` - Get price calculation history
+- `GET /api/v1/orders/{order_id}/status-history` - Get status change history
+- `POST /api/v1/orders/{order_id}/items` - Add item to order
+- `PUT /api/v1/orders/{order_id}/items/{item_id}` - Update order item
+- `DELETE /api/v1/orders/{order_id}/items/{item_id}` - Delete order item
 
-   This opens a local UI where you can inspect and edit database records.
+## Database Models
 
-4. **Reset the Database (⚠️ Deletes All Data)**  
-   If needed, reset your NeonDB and reapply migrations:
+- `Orders` - Main order information
+- `OrderItems` - Individual items in an order
+- `PriceCalculations` - Price calculation details
+- `OrderStatusHistory` - Status change history
 
-   ```sh
-   npx prisma migrate reset
-   ```
+## Getting Started
 
-   ⚠️ Warning: This will delete all data and apply migrations from scratch.
+### Prerequisites
 
-5. **ADD Data**  
-   If needed, reset your NeonDB and reapply migrations:
+- Docker and Docker Compose
+- Python 3.10+ (for local development)
 
-   ```sh
-   npm run seed
-   ```
+### Running with Docker Compose
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and adjust values if needed
+3. Start the services:
+
+```bash
+docker-compose up -d
+```
+
+4. Access the API documentation at http://localhost:8000/api/v1/docs
+
+### Local Development Setup
+
+1. Clone the repository
+2. Create a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+```
+
+3. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Copy `.env.example` to `.env` and adjust values for your environment
+5. Start PostgreSQL and RabbitMQ (via Docker or installed locally)
+6. Run the application:
+
+```bash
+uvicorn main:app --reload
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+## Messaging
+
+The service uses RabbitMQ to publish events such as:
+
+- `order_created`
+- `order_updated`
+- `order_deleted`
+- `order_status_updated`
+- `order_item_added`
+- `order_item_updated`
+- `order_item_deleted`
+- `order_price_calculated`
+
+These events can be consumed by other services for further processing.
+
+## Development
+
+The service uses:
+
+- FastAPI for the web framework
+- Tortoise ORM for database access
+- PostgreSQL for data storage
+- RabbitMQ for messaging
+- Pydantic for data validation
+
+## License
+
+This project is licensed under the MIT License.

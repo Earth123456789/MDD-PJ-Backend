@@ -1,28 +1,29 @@
-# Use official Node.js image as a base
-FROM node:latest
+FROM python:3.12
 
-# Set working directory in the container
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
-# Install necessary tools
-RUN apt-get update && apt-get install -y \
-  libssl-dev \
-  && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install npm dependencies
-RUN npm install
+# Copy requirements file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all files from the current directory to the container
+# Copy project files
 COPY . .
 
-# Run prisma generate to generate the Prisma client with the right binary target
-RUN npx prisma generate
-
-# Expose the application port
+# Expose port
 EXPOSE 3004
 
-# Run the application
-CMD ["npm", "start"]
+# Command to run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3004"]
