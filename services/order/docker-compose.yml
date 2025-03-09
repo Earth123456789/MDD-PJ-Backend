@@ -1,14 +1,10 @@
 version: '3.8'
 
 services:
-  order:
-    build:
-      context: ../services/order
-      dockerfile: Dockerfile
-    container_name: order
+  api:
+    build: .
+    container_name: order_service_api
     restart: always
-    volumes:
-      - ../services/order:/app
     ports:
       - "3004:3004"
     environment:
@@ -25,19 +21,16 @@ services:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
       - DEBUG=False
-    env_file:
-      - ../services/order/.env
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.order.loadbalancer.server.port=3004"
-      - "traefik.http.routers.order.rule=Host(`order.localhost`)"
+
     depends_on:
       - postgres
       - rabbitmq
+    volumes:
+      - .:/app
     command: >
-      bash -c "aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
-    networks:
-      - traefik
+      bash -c "
+        aerich upgrade &&
+        uvicorn main:app --host 0.0.0.0 --port 3004"
 
   postgres:
     image: postgres:latest
@@ -51,31 +44,11 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../services/order/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - traefik
-
-  traefik:
-    image: traefik:latest
-    container_name: traefik
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8080:8080"
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   rabbitmq:
     image: rabbitmq:management
-    container_name: rabbitmq
+    container_name: order_service_rabbitmq
     restart: always
     ports:
       - "5672:5672"
@@ -85,14 +58,6 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=false"
-
-networks:
-  traefik:
-    external: true
 
 volumes:
   postgres_data:

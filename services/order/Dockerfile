@@ -1,30 +1,29 @@
-# Use official Node.js image as a base image
-FROM node:16
+FROM python:3.12
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
-COPY package.json ./ 
-COPY package-lock.json ./ 
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
-# Install dependencies
-RUN npm install
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the TypeScript configuration file
-COPY tsconfig.json ./
+# Copy requirements file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy project files
 COPY . .
 
-# Install TypeScript globally (optional, if needed)
-RUN npm install -g typescript
+# Expose port
+EXPOSE 3004
 
-# Compile TypeScript to JavaScript (dist folder)
-RUN tsc
-
-# Expose the app on port 3001
-EXPOSE 3002
-
-# Start the application (run compiled JavaScript from dist folder)
-CMD ["node", "dist/app.js"]
+# Command to run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3004"]
