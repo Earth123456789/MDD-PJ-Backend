@@ -11,9 +11,10 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Database settings
 DB_ENGINE = os.getenv("DB_ENGINE", "postgres")
-DB_NAME = os.getenv("DB_NAME", "service")
+DB_NAME = os.getenv("DB_NAME", "order_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "Vipat")
+
 # In Docker
 DB_HOST = os.getenv("DB_HOST_DOCKER", "postgres")
 

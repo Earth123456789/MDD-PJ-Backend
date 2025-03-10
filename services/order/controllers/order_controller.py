@@ -8,7 +8,19 @@ from models.models import (
     OrderStatusHistory
 )
 from utils.rabbit_utils import rabbit_client
+import pika
 
+
+def create_rabbitmq_connection():
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host='rabbitmq',  
+            port=5672,
+            virtual_host='/',
+            credentials=pika.PlainCredentials('guest', 'guest')  
+        )
+    )
+    return connection
 
 async def get_all_orders(skip: int = 0, limit: int = 100) -> List[Order_Pydantic]:
     """Get all orders with pagination."""

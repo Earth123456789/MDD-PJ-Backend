@@ -2,7 +2,7 @@
 CREATE DATABASE IF NOT EXISTS service;
 
 -- Connect to the database
-\c service;
+\c order_db;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

@@ -25,17 +25,19 @@ services:
       - APP_HOST=${APP_HOST}
       - APP_PORT=${APP_PORT}
       - DEBUG=False
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
     env_file:
       - ../services/order/.env
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
       - "traefik.http.services.order.loadbalancer.server.port=3004"
       - "traefik.http.routers.order.rule=Host(`order.localhost`)"
     depends_on:
       - postgres
       - rabbitmq
     command: >
-      bash -c "aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
+      bash -c "aerich init-db && aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
     networks:
       - traefik
 
@@ -62,9 +64,11 @@ services:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
     ports:
       - "80:80"
       - "8080:8080"
+      - "443:443"
     networks:
       - traefik
     labels:
@@ -72,6 +76,7 @@ services:
       - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
 
   rabbitmq:
     image: rabbitmq:management
@@ -89,6 +94,25 @@ services:
       - traefik
     labels:
       - "traefik.enable=false"
+    
+  # เวลาเหลือเดี๋ยวมาทำ
+
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+  #   container_name: elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
+  #     - xpack.security.enabled=false
+  #   volumes:
+  #     - elasticsearch_data:/usr/share/elasticsearch/data
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   networks:
+  #     - traefik
+  #   labels:
+  #     - "traefik.enable=false"
 
 networks:
   traefik:
@@ -97,3 +121,4 @@ networks:
 volumes:
   postgres_data:
   rabbitmq_data:
+  # elasticsearch_data:
