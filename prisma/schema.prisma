@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Driver {
+  id                  String                @id @default(uuid())
+  name                String
+  phone               String
+  licenseNumber       String                @unique
+  licenseType         String
+  status              DriverStatus          @default(AVAILABLE)
+  currentLatitude     Float?
+  currentLongitude    Float?
+  locationLastUpdated DateTime?
+  preferredVehicleTypes String[]
+  ratings             Float                 @default(0)
+  experience          Int                   @default(0) // ปีประสบการณ์
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  assignments         DriverVehicleAssignment[]
+}
+
+model Vehicle {
+  id                  String                @id @default(uuid())
+  plateNumber         String                @unique
+  type                String
+  capacity            Float                 // น้ำหนักสูงสุดที่รับได้ (kg)
+  length              Float                 // ความยาว (m)
+  width               Float                 // ความกว้าง (m)
+  height              Float                 // ความสูง (m)
+  status              VehicleStatus         @default(AVAILABLE)
+  fuelCapacity        Float
+  currentFuel         Float
+  features            String[]              // คุณสมบัติพิเศษ
+  currentLatitude     Float?
+  currentLongitude    Float?
+  locationLastUpdated DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  assignments         DriverVehicleAssignment[]
+}
+
+model DriverVehicleAssignment {
+  id                  String                @id @default(uuid())
+  driver              Driver                @relation(fields: [driverId], references: [id])
+  driverId            String
+  vehicle             Vehicle               @relation(fields: [vehicleId], references: [id])
+  vehicleId           String
+  assignedAt          DateTime              @default(now())
+  status              AssignmentStatus      @default(ACTIVE)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([driverId])
+  @@index([vehicleId])
+}
+
+enum DriverStatus {
+  AVAILABLE
+  BUSY
+  OFFLINE
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
