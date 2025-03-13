@@ -23,7 +23,7 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - APP_HOST=${APP_HOST}
-      - APP_PORT=${APP_PORT}
+      - APP_PORT=${ORDER_PORT}
       - DEBUG=False
       - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
     env_file:
@@ -40,7 +40,29 @@ services:
       bash -c "aerich init-db && aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
     networks:
       - traefik
-
+  
+  driver:
+    build:
+      context: ../services/driver
+      dockerfile: Dockerfile
+    container_name: driver
+    volumes:
+      - ../services/driver:/app
+    ports:
+      - "3002:3002" 
+    environment:
+      - DATABASE_URL=${DATABASE_URL_1}
+    env_file:
+      - ../services/driver/.env
+    labels:
+      - "traefik.enable=true" 
+      - "traefik.http.services.product.loadbalancer.server.port=3002"
+      - "traefik.http.routers.product.rule=Host(`driver.localhost`)"  
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - traefik
   postgres:
     image: postgres:latest
     container_name: order_service_db
