@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cargo {
+  cargo_id          BigInt   @id @default(autoincrement())
+  order_id         BigInt   // FK
+  description      String?  @db.VarChar(255)
+  weight_kg        Decimal(10,2)
+  volume_cubic_meters Decimal(10,3)
+  hazard_class     String?  @db.VarChar(2)
+  insurance_value  Decimal(12,2)
+  status          String   @db.VarChar(2)
+
+  cargoTracking   CargoTracking[]
+  cargoStorage    CargoStorage[]
+}
+
+model CargoTypes {
+  type_id             Int   @id @default(autoincrement())
+  type_name          String @db.VarChar(50)
+  handling_instructions Text?
+  special_requirements Text?
+  base_rate_per_kg    Decimal(8,2)
+}
+
+model CargoTracking {
+  tracking_id   BigInt  @id @default(autoincrement())
+  cargo_id      BigInt  @unique
+  location_name String  @db.VarChar(100)
+  latitude      Decimal(10,6)
+  longitude     Decimal(10,6)
+  timestamp     DateTime @default(now())
+  status_update String  @db.VarChar(5)
+
+  cargo Cargo @relation(fields: [cargo_id], references: [cargo_id])
+}
+
+model CargoStorage {
+  storage_id     BigInt  @id @default(autoincrement())
+  cargo_id       BigInt
+  warehouse_id   BigInt
+  storage_location String @db.VarChar(5)
+  check_in_time  DateTime
+  check_out_time DateTime?
+
+  cargo Cargo @relation(fields: [cargo_id], references: [cargo_id])
+}
+
+model Packaging {
+  packaging_id   Int   @id @default(autoincrement())
+  packaging_type String @db.VarChar(50)
+  description    String?
+}
