@@ -1,0 +1,16 @@
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  docker:
+    exposedByDefault: false
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: DEBUG
+
+accessLog: {}

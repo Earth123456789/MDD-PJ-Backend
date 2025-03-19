@@ -1,105 +1,119 @@
 version: '3.8'
 
+networks:
+  traefik:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  rabbitmq_data:
+
 services:
-  order:
+  # NestJS Application
+  matching-service:
     build:
-      context: ../services/order
+      context: ../services/matching
       dockerfile: Dockerfile
-    container_name: order
+    container_name: matching-service
     restart: always
-    volumes:
-      - ../services/order:/app
     ports:
-      - "3004:3004"
-    environment:
-      - DB_ENGINE=${DB_ENGINE}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=${DB_HOST_DOCKER}
-      - DB_PORT=${DB_PORT}
-      - RABBITMQ_HOST=${RABBITMQ_HOST}
-      - RABBITMQ_PORT=${RABBITMQ_PORT}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - APP_HOST=${APP_HOST}
-      - APP_PORT=${ORDER_PORT}
-      - DEBUG=False
-      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - "3001:3001" 
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - elasticsearch
     env_file:
-      - ../services/order/.env
+      - .env
+    volumes:
+      - ../services/matching:/app
+      - /app/node_modules
+    networks:
+      - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.services.order.loadbalancer.server.port=3004"
-      - "traefik.http.routers.order.rule=Host(`order.localhost`)"
-    depends_on:
-      - postgres
-      - rabbitmq
+      - "traefik.http.routers.matching.entrypoints=web"
+      - "traefik.http.routers.matching.rule=Host(matching.localhost)"
+      - "traefik.http.services.matching-service.loadbalancer.server.port=3000"
     command: >
-      bash -c "aerich init-db && aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
-    networks:
-      - traefik
-  
-  driver:
-    build:
-      context: ../services/driver
-      dockerfile: Dockerfile
-    container_name: driver
-    volumes:
-      - ../services/driver:/app
-    ports:
-      - "3002:3002" 
-    environment:
-      - DATABASE_URL=${DATABASE_URL_1}
-    env_file:
-      - ../services/driver/.env
-    labels:
-      - "traefik.enable=true" 
-      - "traefik.http.services.product.loadbalancer.server.port=3002"
-      - "traefik.http.routers.product.rule=Host(`driver.localhost`)"  
-    depends_on:
-      - postgres
-      - rabbitmq
-    networks:
-      - traefik
+      bash -c "
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start:dev
+      "
+
+  # PostgreSQL Database
   postgres:
     image: postgres:latest
-    container_name: order_service_db
+    container_name: postgres
     restart: always
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${DB_NAME}
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=matching
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../services/order/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - traefik
-
-  traefik:
-    image: traefik:latest
-    container_name: traefik
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-    ports:
-      - "80:80"
-      - "8080:8080"
-      - "443:443"
     networks:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.postgres.rule=Host(postgres.localhost)"
+      - "traefik.http.services.postgres.loadbalancer.server.port=5432"
+
+  # PgAdmin - PostgreSQL UI
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./pgadmin:/var/lib/pgadmin
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(pgadmin.vehicle-matching.localhost)"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
 
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - traefik
 
+  # Redis UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis-commander.rule=Host(redis.vehicle-matching.localhost)"
+      - "traefik.http.services.redis-commander.loadbalancer.server.port=8081"
+
+  # RabbitMQ Queue System
   rabbitmq:
     image: rabbitmq:management
     container_name: rabbitmq
@@ -107,40 +121,65 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - traefik
     labels:
-      - "traefik.enable=false"
-    
-  # เวลาเหลือเดี๋ยวมาทำ
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(rabbitmq.vehicle-matching.localhost)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
 
-  # elasticsearch:
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
-  #   container_name: elasticsearch
-  #   environment:
-  #     - discovery.type=single-node
-  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
-  #     - xpack.security.enabled=false
-  #   volumes:
-  #     - elasticsearch_data:/usr/share/elasticsearch/data
-  #   ports:
-  #     - "9200:9200"
-  #     - "9300:9300"
-  #   networks:
-  #     - traefik
-  #   labels:
-  #     - "traefik.enable=false"
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: elasticsearch
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - traefik
 
-networks:
+  # Kibana - Logging UI
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: kibana
+    restart: always
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=Host(kibana.vehicle-matching.localhost)"
+      - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+
+  # Traefik - Load Balancer
   traefik:
-    external: true
-
-volumes:
-  postgres_data:
-  rabbitmq_data:
-  # elasticsearch_data:
+    image: traefik:latest
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=DEBUG"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(traefik.localhost)"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
