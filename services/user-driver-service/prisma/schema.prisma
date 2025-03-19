@@ -1,0 +1,72 @@
+// user-driver-service/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  password   String
+  full_name  String
+  phone      String
+  role       UserRole
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+enum UserRole {
+  customer
+  driver
+  admin
+}
+
+model Driver {
+  id              Int          @id @default(autoincrement())
+  user_id         Int          @unique
+  license_number  String
+  id_card_number  String
+  current_location Json?
+  rating          Float        @default(0)
+  status          DriverStatus
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+}
+
+enum DriverStatus {
+  active
+  inactive
+  suspended
+}
+
+model Vehicle {
+  id            Int           @id @default(autoincrement())
+  driver_id     Int
+  vehicle_type  VehicleType
+  max_weight_kg Int
+  max_volume_m3 Float
+  length_m      Float
+  width_m       Float
+  height_m      Float
+  status        VehicleStatus
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+}
+
+enum VehicleType {
+  motorcycle
+  car
+  pickup
+  truck
+}
+
+enum VehicleStatus {
+  available
+  busy
+  offline
+}
