@@ -14,9 +14,6 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in .env");
 }
 
-console.log("JWT_SECRET:", JWT_SECRET); // ตรวจสอบค่าใน Console
-
-
 const app = express();
 const port = process.env.PORT || 5001;
 

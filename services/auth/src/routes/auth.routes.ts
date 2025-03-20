@@ -1,15 +1,10 @@
 import { Router } from "express";
 import { register, login } from "../controllers/auth.controller";
 import { publishMessage } from "../config/rabbitmq";
+import { validate } from "../middleware/validate";
+import { registerSchema, loginSchema } from "../validators/auth.validators";
 
 const router = Router();
-
-/**
- * @swagger
- * tags:
- *   name: Auth
- *   description: Authentication APIs
- */
 
 /**
  * @swagger
@@ -26,15 +21,17 @@ const router = Router();
  *             properties:
  *               email:
  *                 type: string
+ *                 format: email
  *               password:
  *                 type: string
+ *                 minLength: 8
  *     responses:
  *       201:
  *         description: User registered successfully
  *       400:
- *         description: Email already exists
+ *         description: Invalid input or email already exists
  */
-router.post("/register", register);
+router.post("/register", validate(registerSchema), register);
 
 /**
  * @swagger
@@ -59,7 +56,7 @@ router.post("/register", register);
  *       400:
  *         description: Invalid credentials
  */
-router.post("/login", login);
+router.post("/login", validate(loginSchema), login);
 
 /**
  * @swagger
