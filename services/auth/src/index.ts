@@ -18,7 +18,8 @@ console.log("JWT_SECRET:", JWT_SECRET); // ตรวจสอบค่าใน 
 
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
+
 
 // Middleware
 app.use(cors());

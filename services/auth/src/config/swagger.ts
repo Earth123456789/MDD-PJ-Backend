@@ -1,27 +1,30 @@
-import swaggerJSDoc from "swagger-jsdoc";
+import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import { Express } from "express";
 
-const swaggerOptions = {
+// กำหนด Options สำหรับ Swagger
+const options: swaggerJsdoc.Options = {
   definition: {
     openapi: "3.0.0",
     info: {
       title: "Auth Service API",
       version: "1.0.0",
-      description: "API documentation for authentication service",
+      description: "API documentation for the Authentication Service",
     },
     servers: [
       {
-        url: "http://localhost:5000/api",
+        url: "http://localhost:5001",
         description: "Local server",
       },
     ],
   },
-  apis: ["./src/routes/*.ts"],
+  apis: ["./src/routes/*.ts"], // กำหนดให้ Swagger โหลดจากไฟล์ route
 };
 
-const swaggerDocs = swaggerJSDoc(swaggerOptions);
+// สร้าง Swagger Spec
+const swaggerSpec = swaggerJsdoc(options);
 
-export function setupSwagger(app: Express) {
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-}
+// ฟังก์ชันสำหรับติดตั้ง Swagger ใน Express
+export const setupSwagger = (app: Express) => {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+};

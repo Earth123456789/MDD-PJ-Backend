@@ -6,7 +6,14 @@ const router = Router();
 
 /**
  * @swagger
- * /auth/register:
+ * tags:
+ *   name: Auth
+ *   description: Authentication APIs
+ */
+
+/**
+ * @swagger
+ * /api/auth/register:
  *   post:
  *     summary: Register a new user
  *     tags: [Auth]
@@ -31,7 +38,7 @@ router.post("/register", register);
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
  *     summary: Login user
  *     tags: [Auth]
@@ -56,7 +63,7 @@ router.post("/login", login);
 
 /**
  * @swagger
- * /auth/send-event:
+ * /api/auth/send-event:
  *   post:
  *     summary: Send event to RabbitMQ
  *     tags: [RabbitMQ]
