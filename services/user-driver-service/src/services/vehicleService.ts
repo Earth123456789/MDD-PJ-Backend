@@ -37,7 +37,7 @@ export class VehicleService {
     try {
       // ตรวจสอบว่ามีข้อมูลคนขับอยู่ในระบบหรือไม่
       const driver = await prisma.driver.findUnique({
-        where: { id: data.driver_id }
+        where: { id: data.driver_id },
       });
 
       if (!driver) {
@@ -54,8 +54,8 @@ export class VehicleService {
           length_m: data.length_m,
           width_m: data.width_m,
           height_m: data.height_m,
-          status: (data.status as any) || 'offline'
-        }
+          status: (data.status as any) || 'offline',
+        },
       });
 
       // ส่งข้อความแจ้งเตือนการสร้างรถใหม่
@@ -66,14 +66,14 @@ export class VehicleService {
           driverId: data.driver_id,
           type: newVehicle.vehicle_type,
           status: newVehicle.status,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
       logger.info('Created new vehicle', {
         vehicleId: newVehicle.id,
         driverId: data.driver_id,
-        type: newVehicle.vehicle_type
+        type: newVehicle.vehicle_type,
       });
 
       return newVehicle;
@@ -89,7 +89,7 @@ export class VehicleService {
   public async getVehicleById(vehicleId: number): Promise<any> {
     try {
       const vehicle = await prisma.vehicle.findUnique({
-        where: { id: vehicleId }
+        where: { id: vehicleId },
       });
 
       if (!vehicle) {
@@ -109,7 +109,7 @@ export class VehicleService {
   public async getVehiclesByDriverId(driverId: number): Promise<any> {
     try {
       const vehicles = await prisma.vehicle.findMany({
-        where: { driver_id: driverId }
+        where: { driver_id: driverId },
       });
 
       return vehicles;
@@ -122,10 +122,13 @@ export class VehicleService {
   /**
    * อัพเดทสถานะรถ
    */
-  public async updateVehicleStatus(vehicleId: number, status: 'available' | 'busy' | 'offline'): Promise<any> {
+  public async updateVehicleStatus(
+    vehicleId: number,
+    status: 'available' | 'busy' | 'offline',
+  ): Promise<any> {
     try {
       const vehicle = await prisma.vehicle.findUnique({
-        where: { id: vehicleId }
+        where: { id: vehicleId },
       });
 
       if (!vehicle) {
@@ -135,7 +138,7 @@ export class VehicleService {
       // อัพเดทสถานะ
       const updatedVehicle = await prisma.vehicle.update({
         where: { id: vehicleId },
-        data: { status }
+        data: { status },
       });
 
       // ส่งข้อความแจ้งเตือนการเปลี่ยนสถานะรถ
@@ -146,14 +149,14 @@ export class VehicleService {
           driverId: vehicle.driver_id,
           status,
           previousStatus: vehicle.status,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
       logger.info('Updated vehicle status', {
         vehicleId,
         status,
-        previousStatus: vehicle.status
+        previousStatus: vehicle.status,
       });
 
       return updatedVehicle;
@@ -166,10 +169,13 @@ export class VehicleService {
   /**
    * อัพเดทข้อมูลรถ
    */
-  public async updateVehicle(vehicleId: number, data: VehicleUpdateInput): Promise<any> {
+  public async updateVehicle(
+    vehicleId: number,
+    data: VehicleUpdateInput,
+  ): Promise<any> {
     try {
       const vehicle = await prisma.vehicle.findUnique({
-        where: { id: vehicleId }
+        where: { id: vehicleId },
       });
 
       if (!vehicle) {
@@ -182,7 +188,7 @@ export class VehicleService {
       // อัพเดทข้อมูลรถ
       const updatedVehicle = await prisma.vehicle.update({
         where: { id: vehicleId },
-        data
+        data,
       });
 
       // ถ้ามีการเปลี่ยนสถานะ ให้ส่งข้อความแจ้งเตือน
@@ -194,14 +200,14 @@ export class VehicleService {
             driverId: vehicle.driver_id,
             status: data.status,
             previousStatus,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
       }
 
       logger.info('Updated vehicle information', {
         vehicleId,
-        updatedFields: Object.keys(data)
+        updatedFields: Object.keys(data),
       });
 
       return updatedVehicle;
@@ -217,7 +223,7 @@ export class VehicleService {
   public async deleteVehicle(vehicleId: number): Promise<boolean> {
     try {
       await prisma.vehicle.delete({
-        where: { id: vehicleId }
+        where: { id: vehicleId },
       });
 
       logger.info('Deleted vehicle', { vehicleId });
@@ -232,14 +238,20 @@ export class VehicleService {
   /**
    * ค้นหารถ
    */
-  public async searchVehicles(options: { status?: string, type?: string, driverId?: number, page?: number, limit?: number }): Promise<any> {
+  public async searchVehicles(options: {
+    status?: string;
+    type?: string;
+    driverId?: number;
+    page?: number;
+    limit?: number;
+  }): Promise<any> {
     try {
       const { status, type, driverId, page = 1, limit = 10 } = options;
       const skip = (page - 1) * limit;
 
       // เงื่อนไขในการค้นหา
       const where: any = {};
-      
+
       if (status) {
         where.status = status;
       }
@@ -258,20 +270,22 @@ export class VehicleService {
           where,
           skip,
           take: limit,
-          orderBy: { created_at: 'desc' }
+          orderBy: { created_at: 'desc' },
         }),
-        prisma.vehicle.count({ where })
+        prisma.vehicle.count({ where }),
       ]);
 
       // เพิ่มข้อมูลคนขับแต่ละคัน
       const vehiclesWithDriverData = await Promise.all(
         vehicles.map(async (vehicle) => {
-          const driverData = await driverService.getDriverWithUserData(vehicle.driver_id);
+          const driverData = await driverService.getDriverWithUserData(
+            vehicle.driver_id,
+          );
           return {
             ...vehicle,
-            driver: driverData
+            driver: driverData,
           };
-        })
+        }),
       );
 
       const totalPages = Math.ceil(totalCount / limit);
@@ -282,8 +296,8 @@ export class VehicleService {
           total: totalCount,
           page,
           limit,
-          totalPages
-        }
+          totalPages,
+        },
       };
     } catch (error) {
       logger.error('Error searching vehicles', error);
@@ -294,33 +308,37 @@ export class VehicleService {
   /**
    * ค้นหารถที่พร้อมให้บริการตามประเภทและความสามารถในการบรรทุก
    */
-  public async findAvailableVehiclesByCapacity(requirements: { weight_kg: number, volume_m3?: number, dimensions?: { length_m: number, width_m: number, height_m: number } }): Promise<any> {
+  public async findAvailableVehiclesByCapacity(requirements: {
+    weight_kg: number;
+    volume_m3?: number;
+    dimensions?: { length_m: number; width_m: number; height_m: number };
+  }): Promise<any> {
     try {
       // เงื่อนไขพื้นฐานในการค้นหา
       const where: any = {
         status: 'available',
         max_weight_kg: {
-          gte: requirements.weight_kg
-        }
+          gte: requirements.weight_kg,
+        },
       };
 
       // เพิ่มเงื่อนไขปริมาตรถ้ามีการระบุ
       if (requirements.volume_m3) {
         where.max_volume_m3 = {
-          gte: requirements.volume_m3
+          gte: requirements.volume_m3,
         };
       }
 
       // เพิ่มเงื่อนไขขนาดถ้ามีการระบุ
       if (requirements.dimensions) {
         where.length_m = {
-          gte: requirements.dimensions.length_m
+          gte: requirements.dimensions.length_m,
         };
         where.width_m = {
-          gte: requirements.dimensions.width_m
+          gte: requirements.dimensions.width_m,
         };
         where.height_m = {
-          gte: requirements.dimensions.height_m
+          gte: requirements.dimensions.height_m,
         };
       }
 
@@ -329,24 +347,26 @@ export class VehicleService {
         where,
         orderBy: [
           { max_weight_kg: 'asc' }, // เรียงจากน้อยไปมากเพื่อให้ได้รถที่เหมาะสมที่สุด
-          { max_volume_m3: 'asc' }
-        ]
+          { max_volume_m3: 'asc' },
+        ],
       });
 
       // เพิ่มข้อมูลคนขับแต่ละคัน
       const vehiclesWithDriverData = await Promise.all(
         suitableVehicles.map(async (vehicle) => {
-          const driverData = await driverService.getDriverWithUserData(vehicle.driver_id);
+          const driverData = await driverService.getDriverWithUserData(
+            vehicle.driver_id,
+          );
           return {
             ...vehicle,
-            driver: driverData
+            driver: driverData,
           };
-        })
+        }),
       );
 
       logger.info('Found available vehicles by capacity', {
         requirements,
-        vehiclesCount: suitableVehicles.length
+        vehiclesCount: suitableVehicles.length,
       });
 
       return vehiclesWithDriverData;

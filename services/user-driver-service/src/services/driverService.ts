@@ -1,9 +1,9 @@
 // user-driver-service/src/services/driverService.ts
 
-import { PrismaClient } from "@prisma/client";
-import { logger } from "../utils/logger";
-import { publishMessage } from "../config/rabbitmq";
-import { UserService } from "./userService";
+import { PrismaClient } from '@prisma/client';
+import { logger } from '../utils/logger';
+import { publishMessage } from '../config/rabbitmq';
+import { UserService } from './userService';
 
 const prisma = new PrismaClient();
 const userService = new UserService();
@@ -25,7 +25,7 @@ interface DriverUpdateInput {
     latitude: number;
     longitude: number;
   };
-  status?: "active" | "inactive" | "suspended";
+  status?: 'active' | 'inactive' | 'suspended';
   rating?: number;
 }
 
@@ -50,12 +50,12 @@ export class DriverService {
       });
 
       if (!user) {
-        throw new Error("User not found");
+        throw new Error('User not found');
       }
 
       // ตรวจสอบว่าผู้ใช้มีบทบาทเป็นคนขับหรือไม่
-      if (user.role !== "driver") {
-        throw new Error("User must have driver role");
+      if (user.role !== 'driver') {
+        throw new Error('User must have driver role');
       }
 
       // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
@@ -64,7 +64,7 @@ export class DriverService {
       });
 
       if (existingDriver) {
-        throw new Error("Driver profile already exists for this user");
+        throw new Error('Driver profile already exists for this user');
       }
 
       // สร้างข้อมูลคนขับใหม่
@@ -76,14 +76,14 @@ export class DriverService {
           current_location: data.current_location
             ? data.current_location
             : undefined,
-          status: "inactive", // เริ่มต้นเป็น inactive รอการตรวจสอบ
+          status: 'inactive', // เริ่มต้นเป็น inactive รอการตรวจสอบ
           rating: 0, // เริ่มต้นด้วยคะแนน 0
         },
       });
 
       // ส่งข้อความแจ้งเตือนการสร้างคนขับใหม่
-      await publishMessage("user-events", {
-        event: "DRIVER_CREATED",
+      await publishMessage('user-events', {
+        event: 'DRIVER_CREATED',
         data: {
           driverId: newDriver.id,
           userId: data.user_id,
@@ -92,14 +92,14 @@ export class DriverService {
         },
       });
 
-      logger.info("Created new driver", {
+      logger.info('Created new driver', {
         driverId: newDriver.id,
         userId: data.user_id,
       });
 
       return newDriver;
     } catch (error) {
-      logger.error("Error creating driver", error);
+      logger.error('Error creating driver', error);
       throw error;
     }
   }
@@ -115,17 +115,18 @@ export class DriverService {
         password: data.password,
         full_name: data.full_name,
         phone: data.phone,
-        role: "driver",
+        role: 'driver',
       });
 
       // สร้างข้อมูลคนขับ
       const newDriver = await this.createDriver({
-        user_id: typeof newUser.id === 'string' ? parseInt(newUser.id) : newUser.id,
+        user_id:
+          typeof newUser.id === 'string' ? parseInt(newUser.id) : newUser.id,
         license_number: data.license_number,
         id_card_number: data.id_card_number,
       });
 
-      logger.info("Registered new driver", {
+      logger.info('Registered new driver', {
         driverId: newDriver.id,
         userId: newUser.id,
       });
@@ -135,7 +136,7 @@ export class DriverService {
         driver: newDriver,
       };
     } catch (error) {
-      logger.error("Error registering driver", error);
+      logger.error('Error registering driver', error);
       throw error;
     }
   }
@@ -155,7 +156,7 @@ export class DriverService {
 
       return driver;
     } catch (error) {
-      logger.error("Error fetching driver by ID", error);
+      logger.error('Error fetching driver by ID', error);
       throw error;
     }
   }
@@ -175,7 +176,7 @@ export class DriverService {
 
       return driver;
     } catch (error) {
-      logger.error("Error fetching driver by user ID", error);
+      logger.error('Error fetching driver by user ID', error);
       throw error;
     }
   }
@@ -194,10 +195,11 @@ export class DriverService {
       }
 
       // แปลง user_id เป็น number (ถ้าเป็น string)
-      const userId = typeof driver.user_id === 'string' 
-        ? parseInt(driver.user_id) 
-        : driver.user_id;
-      
+      const userId =
+        typeof driver.user_id === 'string'
+          ? parseInt(driver.user_id)
+          : driver.user_id;
+
       const userData = await userService.getUserById(userId);
 
       return {
@@ -205,7 +207,7 @@ export class DriverService {
         user: userData,
       };
     } catch (error) {
-      logger.error("Error fetching driver with user data", error);
+      logger.error('Error fetching driver with user data', error);
       throw error;
     }
   }
@@ -215,7 +217,7 @@ export class DriverService {
    */
   public async updateDriverStatus(
     driverId: number,
-    status: "active" | "inactive" | "suspended"
+    status: 'active' | 'inactive' | 'suspended',
   ): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
@@ -223,7 +225,7 @@ export class DriverService {
       });
 
       if (!driver) {
-        throw new Error("Driver not found");
+        throw new Error('Driver not found');
       }
 
       // อัพเดทสถานะ
@@ -233,18 +235,21 @@ export class DriverService {
       });
 
       // ส่งข้อความแจ้งเตือนการเปลี่ยนสถานะคนขับ
-      await publishMessage("user-events", {
-        event: "DRIVER_STATUS_CHANGED",
+      await publishMessage('user-events', {
+        event: 'DRIVER_STATUS_CHANGED',
         data: {
           driverId,
-          userId: typeof driver.user_id === 'string' ? parseInt(driver.user_id) : driver.user_id,
+          userId:
+            typeof driver.user_id === 'string'
+              ? parseInt(driver.user_id)
+              : driver.user_id,
           status,
           previousStatus: driver.status,
           timestamp: new Date().toISOString(),
         },
       });
 
-      logger.info("Updated driver status", {
+      logger.info('Updated driver status', {
         driverId,
         status,
         previousStatus: driver.status,
@@ -252,7 +257,7 @@ export class DriverService {
 
       return updatedDriver;
     } catch (error) {
-      logger.error("Error updating driver status", error);
+      logger.error('Error updating driver status', error);
       throw error;
     }
   }
@@ -262,7 +267,7 @@ export class DriverService {
    */
   public async updateDriverLocation(
     driverId: number,
-    location: { latitude: number; longitude: number }
+    location: { latitude: number; longitude: number },
   ): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
@@ -270,7 +275,7 @@ export class DriverService {
       });
 
       if (!driver) {
-        throw new Error("Driver not found");
+        throw new Error('Driver not found');
       }
 
       // อัพเดทตำแหน่ง
@@ -280,17 +285,20 @@ export class DriverService {
       });
 
       // ส่งข้อความแจ้งเตือนการเปลี่ยนตำแหน่งคนขับ
-      await publishMessage("driver-location-events", {
-        event: "DRIVER_LOCATION_UPDATED",
+      await publishMessage('driver-location-events', {
+        event: 'DRIVER_LOCATION_UPDATED',
         data: {
           driverId,
-          userId: typeof driver.user_id === 'string' ? parseInt(driver.user_id) : driver.user_id,
+          userId:
+            typeof driver.user_id === 'string'
+              ? parseInt(driver.user_id)
+              : driver.user_id,
           location,
           timestamp: new Date().toISOString(),
         },
       });
 
-      logger.info("Updated driver location", {
+      logger.info('Updated driver location', {
         driverId,
         latitude: location.latitude,
         longitude: location.longitude,
@@ -298,7 +306,7 @@ export class DriverService {
 
       return updatedDriver;
     } catch (error) {
-      logger.error("Error updating driver location", error);
+      logger.error('Error updating driver location', error);
       throw error;
     }
   }
@@ -308,7 +316,7 @@ export class DriverService {
    */
   public async updateDriver(
     driverId: number,
-    data: DriverUpdateInput
+    data: DriverUpdateInput,
   ): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
@@ -316,7 +324,7 @@ export class DriverService {
       });
 
       if (!driver) {
-        throw new Error("Driver not found");
+        throw new Error('Driver not found');
       }
 
       // เก็บสถานะเดิมเพื่อตรวจสอบการเปลี่ยนแปลง
@@ -330,11 +338,14 @@ export class DriverService {
 
       // ถ้ามีการเปลี่ยนสถานะ ให้ส่งข้อความแจ้งเตือน
       if (data.status && data.status !== previousStatus) {
-        await publishMessage("user-events", {
-          event: "DRIVER_STATUS_CHANGED",
+        await publishMessage('user-events', {
+          event: 'DRIVER_STATUS_CHANGED',
           data: {
             driverId,
-            userId: typeof driver.user_id === 'string' ? parseInt(driver.user_id) : driver.user_id,
+            userId:
+              typeof driver.user_id === 'string'
+                ? parseInt(driver.user_id)
+                : driver.user_id,
             status: data.status,
             previousStatus,
             timestamp: new Date().toISOString(),
@@ -344,25 +355,28 @@ export class DriverService {
 
       // ถ้ามีการอัพเดทตำแหน่ง ให้ส่งข้อความแจ้งเตือน
       if (data.current_location) {
-        await publishMessage("driver-location-events", {
-          event: "DRIVER_LOCATION_UPDATED",
+        await publishMessage('driver-location-events', {
+          event: 'DRIVER_LOCATION_UPDATED',
           data: {
             driverId,
-            userId: typeof driver.user_id === 'string' ? parseInt(driver.user_id) : driver.user_id,
+            userId:
+              typeof driver.user_id === 'string'
+                ? parseInt(driver.user_id)
+                : driver.user_id,
             location: data.current_location,
             timestamp: new Date().toISOString(),
           },
         });
       }
 
-      logger.info("Updated driver information", {
+      logger.info('Updated driver information', {
         driverId,
         updatedFields: Object.keys(data),
       });
 
       return updatedDriver;
     } catch (error) {
-      logger.error("Error updating driver", error);
+      logger.error('Error updating driver', error);
       throw error;
     }
   }
@@ -397,17 +411,19 @@ export class DriverService {
         // ค้นหาผู้ใช้ที่มีบทบาทเป็นคนขับและข้อมูลตรงกับคำค้นหา
         const users = await prisma.user.findMany({
           where: {
-            role: "driver",
+            role: 'driver',
             OR: [
-              { email: { contains: query, mode: "insensitive" } },
-              { full_name: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: 'insensitive' } },
+              { full_name: { contains: query, mode: 'insensitive' } },
               { phone: { contains: query } },
             ],
           },
           select: { id: true },
         });
 
-        userIds = users.map((user) => typeof user.id === 'string' ? parseInt(user.id) : user.id);
+        userIds = users.map((user) =>
+          typeof user.id === 'string' ? parseInt(user.id) : user.id,
+        );
 
         if (userIds.length > 0) {
           where.user_id = { in: userIds };
@@ -426,7 +442,7 @@ export class DriverService {
           where,
           skip,
           take: limit,
-          orderBy: { created_at: "desc" },
+          orderBy: { created_at: 'desc' },
         }),
         prisma.driver.count({ where }),
       ]);
@@ -435,16 +451,17 @@ export class DriverService {
       const driverWithUserData = await Promise.all(
         drivers.map(async (driver) => {
           // แปลง user_id เป็น number (ถ้าเป็น string)
-          const userId = typeof driver.user_id === 'string' 
-            ? parseInt(driver.user_id) 
-            : driver.user_id;
-            
+          const userId =
+            typeof driver.user_id === 'string'
+              ? parseInt(driver.user_id)
+              : driver.user_id;
+
           const userData = await userService.getUserById(userId);
           return {
             ...driver,
             user: userData,
           };
-        })
+        }),
       );
 
       const totalPages = Math.ceil(totalCount / limit);
@@ -459,7 +476,7 @@ export class DriverService {
         },
       };
     } catch (error) {
-      logger.error("Error searching drivers", error);
+      logger.error('Error searching drivers', error);
       throw error;
     }
   }
@@ -470,7 +487,7 @@ export class DriverService {
   public async rateDriver(driverId: number, rating: number): Promise<any> {
     try {
       if (rating < 0 || rating > 5) {
-        throw new Error("Rating must be between 0 and 5");
+        throw new Error('Rating must be between 0 and 5');
       }
 
       const driver = await prisma.driver.findUnique({
@@ -478,7 +495,7 @@ export class DriverService {
       });
 
       if (!driver) {
-        throw new Error("Driver not found");
+        throw new Error('Driver not found');
       }
 
       // อัพเดทคะแนน (คำนวณคะแนนเฉลี่ยจะอยู่ในระบบอื่น)
@@ -487,14 +504,14 @@ export class DriverService {
         data: { rating },
       });
 
-      logger.info("Updated driver rating", {
+      logger.info('Updated driver rating', {
         driverId,
         rating,
       });
 
       return updatedDriver;
     } catch (error) {
-      logger.error("Error rating driver", error);
+      logger.error('Error rating driver', error);
       throw error;
     }
   }
@@ -508,11 +525,11 @@ export class DriverService {
         where: { id: driverId },
       });
 
-      logger.info("Deleted driver", { driverId });
+      logger.info('Deleted driver', { driverId });
 
       return true;
     } catch (error) {
-      logger.error("Error deleting driver", error);
+      logger.error('Error deleting driver', error);
       throw error;
     }
   }
@@ -522,13 +539,13 @@ export class DriverService {
    */
   public async findAvailableDriversNearby(
     location: { latitude: number; longitude: number },
-    radius: number = 5
+    radius: number = 5,
   ): Promise<any> {
     try {
       // ดึงข้อมูลคนขับที่มีสถานะ active โดยไม่มีเงื่อนไข current_location
       const activeDrivers = await prisma.driver.findMany({
         where: {
-          status: "active",
+          status: 'active',
         },
       });
 
@@ -548,7 +565,7 @@ export class DriverService {
             location.latitude,
             location.longitude,
             driverLocation.latitude,
-            driverLocation.longitude
+            driverLocation.longitude,
           );
 
           return {
@@ -559,7 +576,7 @@ export class DriverService {
         .filter((driver) => driver !== null && driver.distance <= radius)
         .sort((a, b) => a!.distance - b!.distance);
 
-      logger.info("Found available drivers nearby", {
+      logger.info('Found available drivers nearby', {
         location,
         radius,
         driversCount: driversInRadius.length,
@@ -567,7 +584,7 @@ export class DriverService {
 
       return driversInRadius;
     } catch (error) {
-      logger.error("Error finding available drivers nearby", error);
+      logger.error('Error finding available drivers nearby', error);
       throw error;
     }
   }
@@ -579,7 +596,7 @@ export class DriverService {
     lat1: number,
     lon1: number,
     lat2: number,
-    lon2: number
+    lon2: number,
   ): number {
     const R = 6371; // รัศมีของโลกในหน่วยกิโลเมตร
     const dLat = this.degToRad(lat2 - lat1);

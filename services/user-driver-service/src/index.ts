@@ -13,7 +13,7 @@ import { setupEventConsumers } from './consumers';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = parseInt(process.env.PORT as string) || 3001;
 
 // Middleware
 app.use(cors());
@@ -33,7 +33,7 @@ app.get('/health', (req, res) => {
 // Start server
 const server = app.listen(port, async () => {
   logger.info(`User & Driver Service running on port ${port}`);
-  
+
   // Connect to RabbitMQ if enabled
   if (process.env.ENABLE_RABBITMQ === 'true') {
     try {
@@ -52,16 +52,16 @@ const server = app.listen(port, async () => {
 // Graceful shutdown
 const shutdown = async () => {
   logger.info('Shutting down server...');
-  
+
   // Close RabbitMQ connection
   await closeRabbitMQConnection();
-  
+
   // Close server
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
   });
-  
+
   // Force close after 10 seconds
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');

@@ -21,7 +21,7 @@ export class VehicleController {
         length_m,
         width_m,
         height_m,
-        status
+        status,
       } = req.body;
 
       // ตรวจสอบข้อมูลที่จำเป็น
@@ -36,7 +36,7 @@ export class VehicleController {
       ) {
         res.status(400).json({
           success: false,
-          message: 'Missing required fields'
+          message: 'Missing required fields',
         });
         return;
       }
@@ -46,7 +46,7 @@ export class VehicleController {
       if (!validTypes.includes(vehicle_type)) {
         res.status(400).json({
           success: false,
-          message: `Invalid vehicle type. Must be one of: ${validTypes.join(', ')}`
+          message: `Invalid vehicle type. Must be one of: ${validTypes.join(', ')}`,
         });
         return;
       }
@@ -60,12 +60,12 @@ export class VehicleController {
         length_m,
         width_m,
         height_m,
-        status
+        status,
       });
 
       res.status(201).json({
         success: true,
-        data: newVehicle
+        data: newVehicle,
       });
     } catch (error: any) {
       logger.error('Error creating vehicle', error);
@@ -73,14 +73,14 @@ export class VehicleController {
       if (error.message === 'Driver not found') {
         res.status(404).json({
           success: false,
-          message: 'Driver not found'
+          message: 'Driver not found',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while creating vehicle'
+        message: 'An error occurred while creating vehicle',
       });
     }
   }
@@ -99,20 +99,20 @@ export class VehicleController {
       if (!vehicle) {
         res.status(404).json({
           success: false,
-          message: 'Vehicle not found'
+          message: 'Vehicle not found',
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: vehicle
+        data: vehicle,
       });
     } catch (error) {
       logger.error('Error fetching vehicle by ID', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching vehicle data'
+        message: 'An error occurred while fetching vehicle data',
       });
     }
   }
@@ -121,22 +121,27 @@ export class VehicleController {
    * ดึงข้อมูลรถตาม driver_id
    * @route GET /api/vehicles/driver/:driverId
    */
-  public async getVehiclesByDriverId(req: Request, res: Response): Promise<void> {
+  public async getVehiclesByDriverId(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
     try {
       const { driverId } = req.params;
 
       // ดึงข้อมูลรถ โดยแปลง driverId เป็น number
-      const vehicles = await vehicleService.getVehiclesByDriverId(parseInt(driverId));
+      const vehicles = await vehicleService.getVehiclesByDriverId(
+        parseInt(driverId),
+      );
 
       res.status(200).json({
         success: true,
-        data: vehicles
+        data: vehicles,
       });
     } catch (error) {
       logger.error('Error fetching vehicles by driver ID', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching vehicle data'
+        message: 'An error occurred while fetching vehicle data',
       });
     }
   }
@@ -155,17 +160,20 @@ export class VehicleController {
       if (!status || !validStatuses.includes(status)) {
         res.status(400).json({
           success: false,
-          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
         });
         return;
       }
 
       // อัพเดทสถานะ โดยแปลง id เป็น number
-      const updatedVehicle = await vehicleService.updateVehicleStatus(parseInt(id), status);
+      const updatedVehicle = await vehicleService.updateVehicleStatus(
+        parseInt(id),
+        status,
+      );
 
       res.status(200).json({
         success: true,
-        data: updatedVehicle
+        data: updatedVehicle,
       });
     } catch (error: any) {
       logger.error('Error updating vehicle status', error);
@@ -173,14 +181,14 @@ export class VehicleController {
       if (error.message === 'Vehicle not found') {
         res.status(404).json({
           success: false,
-          message: 'Vehicle not found'
+          message: 'Vehicle not found',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while updating vehicle status'
+        message: 'An error occurred while updating vehicle status',
       });
     }
   }
@@ -199,7 +207,7 @@ export class VehicleController {
         length_m,
         width_m,
         height_m,
-        status
+        status,
       } = req.body;
 
       // ตรวจสอบว่ามีข้อมูลที่จะอัพเดทหรือไม่
@@ -214,7 +222,7 @@ export class VehicleController {
       ) {
         res.status(400).json({
           success: false,
-          message: 'No data to update'
+          message: 'No data to update',
         });
         return;
       }
@@ -225,7 +233,7 @@ export class VehicleController {
         if (!validTypes.includes(vehicle_type)) {
           res.status(400).json({
             success: false,
-            message: `Invalid vehicle type. Must be one of: ${validTypes.join(', ')}`
+            message: `Invalid vehicle type. Must be one of: ${validTypes.join(', ')}`,
           });
           return;
         }
@@ -237,7 +245,7 @@ export class VehicleController {
         if (!validStatuses.includes(status)) {
           res.status(400).json({
             success: false,
-            message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+            message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
           });
           return;
         }
@@ -254,11 +262,14 @@ export class VehicleController {
       if (status) updateData.status = status;
 
       // อัพเดทข้อมูลรถ โดยแปลง id เป็น number
-      const updatedVehicle = await vehicleService.updateVehicle(parseInt(id), updateData);
+      const updatedVehicle = await vehicleService.updateVehicle(
+        parseInt(id),
+        updateData,
+      );
 
       res.status(200).json({
         success: true,
-        data: updatedVehicle
+        data: updatedVehicle,
       });
     } catch (error: any) {
       logger.error('Error updating vehicle', error);
@@ -266,14 +277,14 @@ export class VehicleController {
       if (error.message === 'Vehicle not found') {
         res.status(404).json({
           success: false,
-          message: 'Vehicle not found'
+          message: 'Vehicle not found',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while updating vehicle'
+        message: 'An error occurred while updating vehicle',
       });
     }
   }
@@ -291,13 +302,13 @@ export class VehicleController {
 
       res.status(200).json({
         success: true,
-        message: 'Vehicle deleted successfully'
+        message: 'Vehicle deleted successfully',
       });
     } catch (error) {
       logger.error('Error deleting vehicle', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while deleting vehicle'
+        message: 'An error occurred while deleting vehicle',
       });
     }
   }
@@ -316,19 +327,19 @@ export class VehicleController {
         type: type as string,
         driverId: driver_id ? parseInt(driver_id as string) : undefined,
         page: parseInt(page as string),
-        limit: parseInt(limit as string)
+        limit: parseInt(limit as string),
       });
 
       res.status(200).json({
         success: true,
         data: result.items,
-        pagination: result.pagination
+        pagination: result.pagination,
       });
     } catch (error) {
       logger.error('Error searching vehicles', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while searching vehicles'
+        message: 'An error occurred while searching vehicles',
       });
     }
   }
@@ -337,28 +348,25 @@ export class VehicleController {
    * ค้นหารถที่มีความสามารถในการบรรทุกตามที่ต้องการ
    * @route GET /api/vehicles/capacity
    */
-  public async findVehiclesByCapacity(req: Request, res: Response): Promise<void> {
+  public async findVehiclesByCapacity(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
     try {
-      const {
-        weight_kg,
-        volume_m3,
-        length_m,
-        width_m,
-        height_m
-      } = req.query;
+      const { weight_kg, volume_m3, length_m, width_m, height_m } = req.query;
 
       // ตรวจสอบข้อมูลที่จำเป็น
       if (!weight_kg) {
         res.status(400).json({
           success: false,
-          message: 'Weight is required'
+          message: 'Weight is required',
         });
         return;
       }
 
       // สร้างข้อมูลสำหรับค้นหา
       const requirements: any = {
-        weight_kg: parseFloat(weight_kg as string)
+        weight_kg: parseFloat(weight_kg as string),
       };
 
       if (volume_m3) {
@@ -369,22 +377,23 @@ export class VehicleController {
         requirements.dimensions = {
           length_m: parseFloat(length_m as string),
           width_m: parseFloat(width_m as string),
-          height_m: parseFloat(height_m as string)
+          height_m: parseFloat(height_m as string),
         };
       }
 
       // ค้นหารถ
-      const vehicles = await vehicleService.findAvailableVehiclesByCapacity(requirements);
+      const vehicles =
+        await vehicleService.findAvailableVehiclesByCapacity(requirements);
 
       res.status(200).json({
         success: true,
-        data: vehicles
+        data: vehicles,
       });
     } catch (error) {
       logger.error('Error finding vehicles by capacity', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while finding vehicles by capacity'
+        message: 'An error occurred while finding vehicles by capacity',
       });
     }
   }

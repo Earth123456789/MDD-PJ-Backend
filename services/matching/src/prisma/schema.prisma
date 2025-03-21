@@ -52,7 +52,7 @@ model Vehicle {
 }
 
 model Order {
-  id                String       @id @default(uuid())
+  id             Int           @id @default(autoincrement())
   user_id           Int
   pickup_location   Json
   dropoff_location  Json

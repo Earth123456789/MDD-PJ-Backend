@@ -178,7 +178,11 @@ router.get('/user/:userId', driverController.getDriverByUserId);
  *       500:
  *         description: Server error
  */
-router.patch('/:id/status', authMiddleware, driverController.updateDriverStatus);
+router.patch(
+  '/:id/status',
+  authMiddleware,
+  driverController.updateDriverStatus,
+);
 
 /**
  * @swagger
@@ -217,7 +221,11 @@ router.patch('/:id/status', authMiddleware, driverController.updateDriverStatus)
  *       500:
  *         description: Server error
  */
-router.patch('/:id/location', authMiddleware, driverController.updateDriverLocation);
+router.patch(
+  '/:id/location',
+  authMiddleware,
+  driverController.updateDriverLocation,
+);
 
 /**
  * @swagger

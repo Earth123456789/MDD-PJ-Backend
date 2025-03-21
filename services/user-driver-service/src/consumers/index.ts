@@ -13,23 +13,23 @@ export const setupEventConsumers = async (): Promise<void> => {
     // รับข้อความจากคิว 'order-events'
     await consumeMessages('order-events', async (message) => {
       logger.info('Received order event:', message);
-      
+
       switch (message.event) {
         case 'ORDER_MATCHED':
           // เมื่อออเดอร์ถูกจับคู่กับรถ ให้อัพเดทสถานะรถเป็น busy
           await handleOrderMatched(message.data);
           break;
-          
+
         case 'ORDER_STATUS_CHANGED':
           // เมื่อสถานะออเดอร์เปลี่ยน ถ้าเป็น completed หรือ cancelled ให้อัพเดทสถานะรถ
           await handleOrderStatusChanged(message.data);
           break;
-          
+
         default:
           logger.debug('Ignored order event:', message.event);
       }
     });
-    
+
     logger.info('Event consumers setup completed');
   } catch (error) {
     logger.error('Failed to setup event consumers:', error);
@@ -43,15 +43,15 @@ export const setupEventConsumers = async (): Promise<void> => {
 const handleOrderMatched = async (data: any): Promise<void> => {
   try {
     const { vehicleId } = data;
-    
+
     if (!vehicleId) {
       logger.warn('Missing vehicleId in ORDER_MATCHED event');
       return;
     }
-    
+
     // อัพเดทสถานะรถเป็น busy
     await vehicleService.updateVehicleStatus(vehicleId, 'busy');
-    
+
     logger.info('Updated vehicle status to busy', { vehicleId });
   } catch (error) {
     logger.error('Error handling ORDER_MATCHED event:', error);
@@ -64,17 +64,21 @@ const handleOrderMatched = async (data: any): Promise<void> => {
 const handleOrderStatusChanged = async (data: any): Promise<void> => {
   try {
     const { orderId, newStatus, vehicleId } = data;
-    
+
     // ถ้าไม่มี vehicleId ให้ข้ามไป
     if (!vehicleId) {
       return;
     }
-    
+
     // ถ้าสถานะเป็น completed หรือ cancelled ให้อัพเดทสถานะรถเป็น available
     if (newStatus === 'completed' || newStatus === 'cancelled') {
       await vehicleService.updateVehicleStatus(vehicleId, 'available');
-      
-      logger.info('Updated vehicle status to available', { vehicleId, orderId, orderStatus: newStatus });
+
+      logger.info('Updated vehicle status to available', {
+        vehicleId,
+        orderId,
+        orderStatus: newStatus,
+      });
     }
   } catch (error) {
     logger.error('Error handling ORDER_STATUS_CHANGED event:', error);

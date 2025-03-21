@@ -18,7 +18,7 @@ type OrderWithVehicle = Order & {
 
 // Type for status history items
 interface StatusHistoryItem {
-  status: string; // Changed from OrderStatus to string to avoid type issues
+  status: string; 
   timestamp: string;
   description: string;
 }

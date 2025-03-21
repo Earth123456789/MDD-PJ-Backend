@@ -19,7 +19,7 @@ export class UserController {
       if (!email || !password || !full_name || !phone) {
         res.status(400).json({
           success: false,
-          message: 'Missing required fields'
+          message: 'Missing required fields',
         });
         return;
       }
@@ -29,7 +29,7 @@ export class UserController {
       if (role && !validRoles.includes(role)) {
         res.status(400).json({
           success: false,
-          message: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+          message: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
         });
         return;
       }
@@ -40,12 +40,12 @@ export class UserController {
         password,
         full_name,
         phone,
-        role: role || 'customer'
+        role: role || 'customer',
       });
 
       res.status(201).json({
         success: true,
-        data: newUser
+        data: newUser,
       });
     } catch (error: any) {
       logger.error('Error registering user', error);
@@ -53,14 +53,14 @@ export class UserController {
       if (error.message === 'Email already exists') {
         res.status(409).json({
           success: false,
-          message: 'Email already in use'
+          message: 'Email already in use',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while registering user'
+        message: 'An error occurred while registering user',
       });
     }
   }
@@ -77,7 +77,7 @@ export class UserController {
       if (!email || !password) {
         res.status(400).json({
           success: false,
-          message: 'Email and password are required'
+          message: 'Email and password are required',
         });
         return;
       }
@@ -87,7 +87,7 @@ export class UserController {
 
       res.status(200).json({
         success: true,
-        data: loginResult
+        data: loginResult,
       });
     } catch (error: any) {
       logger.error('Error during login', error);
@@ -95,14 +95,14 @@ export class UserController {
       if (error.message === 'Invalid email or password') {
         res.status(401).json({
           success: false,
-          message: 'Invalid email or password'
+          message: 'Invalid email or password',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred during login'
+        message: 'An error occurred during login',
       });
     }
   }
@@ -119,7 +119,7 @@ export class UserController {
       if (!userId) {
         res.status(401).json({
           success: false,
-          message: 'Unauthorized'
+          message: 'Unauthorized',
         });
         return;
       }
@@ -130,20 +130,20 @@ export class UserController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: user
+        data: user,
       });
     } catch (error) {
       logger.error('Error fetching current user', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching user data'
+        message: 'An error occurred while fetching user data',
       });
     }
   }
@@ -162,20 +162,20 @@ export class UserController {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: user
+        data: user,
       });
     } catch (error) {
       logger.error('Error fetching user by ID', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching user data'
+        message: 'An error occurred while fetching user data',
       });
     }
   }
@@ -193,7 +193,7 @@ export class UserController {
       if (!full_name && !phone && !email) {
         res.status(400).json({
           success: false,
-          message: 'No data to update'
+          message: 'No data to update',
         });
         return;
       }
@@ -205,11 +205,14 @@ export class UserController {
       if (email) updateData.email = email;
 
       // อัพเดทข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const updatedUser = await userService.updateUser(parseInt(id), updateData);
+      const updatedUser = await userService.updateUser(
+        parseInt(id),
+        updateData,
+      );
 
       res.status(200).json({
         success: true,
-        data: updatedUser
+        data: updatedUser,
       });
     } catch (error: any) {
       logger.error('Error updating user', error);
@@ -217,7 +220,7 @@ export class UserController {
       if (error.message === 'User not found') {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
         });
         return;
       }
@@ -225,14 +228,14 @@ export class UserController {
       if (error.message === 'Email already exists') {
         res.status(409).json({
           success: false,
-          message: 'Email already in use'
+          message: 'Email already in use',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while updating user'
+        message: 'An error occurred while updating user',
       });
     }
   }
@@ -250,17 +253,21 @@ export class UserController {
       if (!current_password || !new_password) {
         res.status(400).json({
           success: false,
-          message: 'Current password and new password are required'
+          message: 'Current password and new password are required',
         });
         return;
       }
 
       // เปลี่ยนรหัสผ่าน โดยแปลง id จาก string เป็น number
-      const result = await userService.changePassword(parseInt(id), current_password, new_password);
+      const result = await userService.changePassword(
+        parseInt(id),
+        current_password,
+        new_password,
+      );
 
       res.status(200).json({
         success: true,
-        message: 'Password changed successfully'
+        message: 'Password changed successfully',
       });
     } catch (error: any) {
       logger.error('Error changing password', error);
@@ -268,7 +275,7 @@ export class UserController {
       if (error.message === 'User not found') {
         res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
         });
         return;
       }
@@ -276,14 +283,14 @@ export class UserController {
       if (error.message === 'Current password is incorrect') {
         res.status(401).json({
           success: false,
-          message: 'Current password is incorrect'
+          message: 'Current password is incorrect',
         });
         return;
       }
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while changing password'
+        message: 'An error occurred while changing password',
       });
     }
   }
@@ -301,13 +308,13 @@ export class UserController {
 
       res.status(200).json({
         success: true,
-        message: 'User deleted successfully'
+        message: 'User deleted successfully',
       });
     } catch (error) {
       logger.error('Error deleting user', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while deleting user'
+        message: 'An error occurred while deleting user',
       });
     }
   }
@@ -325,19 +332,19 @@ export class UserController {
         role: role as string,
         query: query as string,
         page: parseInt(page as string),
-        limit: parseInt(limit as string)
+        limit: parseInt(limit as string),
       });
 
       res.status(200).json({
         success: true,
         data: result.items,
-        pagination: result.pagination
+        pagination: result.pagination,
       });
     } catch (error) {
       logger.error('Error searching users', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while searching users'
+        message: 'An error occurred while searching users',
       });
     }
   }

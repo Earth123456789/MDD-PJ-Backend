@@ -208,7 +208,11 @@ router.patch('/:id', authMiddleware, userController.updateUser);
  *       500:
  *         description: Server error
  */
-router.post('/:id/change-password', authMiddleware, userController.changePassword);
+router.post(
+  '/:id/change-password',
+  authMiddleware,
+  userController.changePassword,
+);
 
 /**
  * @swagger

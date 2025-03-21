@@ -1,30 +1,33 @@
 FROM node:18-alpine
 
-WORKDIR /usr/src/app
+# Install system dependencies for Alpine
+RUN apk add --no-cache \
+    openssl \
+    build-base \
+    python3 \
+    make \
+    g++ \
+    libc6-compat
 
-# ติดตั้ง dependencies ที่จำเป็น
-RUN apk --no-cache add curl postgresql-client
+WORKDIR /app
 
-# สำเนาไฟล์ package.json และ package-lock.json
+# Copy package files first for caching
 COPY package*.json ./
 
-# ติดตั้ง dependencies
-RUN npm install
+# Install dependencies using npm ci for a clean install
+RUN npm ci
 
-# สำเนาไฟล์โปรเจคทั้งหมด
-COPY . .
-
-# สร้าง Prisma client
+# Copy Prisma files and generate client
+COPY prisma ./prisma
 RUN npx prisma generate
 
-# Build โปรเจค
+# Copy the rest of the application source code
+COPY . .
+
+# Build the application
 RUN npm run build
 
-# เปิดพอร์ต
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD curl -f http://localhost:3001/health || exit 1
-
-# รันแอปพลิเคชัน
+# Start the application
 CMD ["npm", "start"]

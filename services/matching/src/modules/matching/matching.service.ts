@@ -38,7 +38,7 @@ export class MatchingService {
     this.logger.log(`Starting matching process for order: ${orderId}`);
 
     try {
-      const orderIdNumber = parseInt(orderId, 10); 
+      const orderIdNumber = parseInt(orderId, 10);
 
       if (isNaN(orderIdNumber)) {
         throw new Error(`Invalid order ID: ${orderId}`);
@@ -46,7 +46,7 @@ export class MatchingService {
 
       // Update order status to MATCHING
       const order = await this.prisma.order.update({
-        where: { id: orderIdNumber }, 
+        where: { id: orderIdNumber },
         data: { status: OrderStatus.MATCHING },
       });
 

@@ -142,7 +142,11 @@ router.get('/driver/:driverId', vehicleController.getVehiclesByDriverId);
  *       500:
  *         description: Server error
  */
-router.patch('/:id/status', authMiddleware, vehicleController.updateVehicleStatus);
+router.patch(
+  '/:id/status',
+  authMiddleware,
+  vehicleController.updateVehicleStatus,
+);
 
 /**
  * @swagger
