@@ -1,0 +1,40 @@
+# Dependency directories
+node_modules
+npm-debug.log
+
+# Environment variables
+.env
+*.env
+
+# Git
+.git
+.gitignore
+
+# Testing
+test
+coverage
+
+# Development files
+*.md
+README.md
+
+# Logs
+logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Development tools
+.vscode
+.idea
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

@@ -1,0 +1,93 @@
+version: '3.8' 
+ 
+services: 
+  rabbitmq: 
+    image: rabbitmq:3-management 
+    container_name: rabbitmq 
+    ports: 
+      - "5672:5672"  # RabbitMQ port 
+      - "15672:15672"  # Management UI 
+    environment: 
+      - RABBITMQ_DEFAULT_USER=admin 
+      - RABBITMQ_DEFAULT_PASS=adminpassword 
+    volumes: 
+      - rabbitmq_data:/var/lib/rabbitmq 
+    networks: 
+      - delivery_network 
+ 
+  user-service: 
+    build: ./user-driver-service 
+    container_name: user-service 
+    ports: 
+      - "3001:3000" 
+    environment: 
+      - DATABASE_URL=${USER_SERVICE_DB_URL} 
+      - RABBIT_MQ_URL=amqp://admin:adminpassword@rabbitmq:5672 
+      - NODE_ENV=development 
+    depends_on: 
+      - rabbitmq 
+    networks: 
+      - delivery_network 
+ 
+  order-service: 
+    build: ./order-matching-service 
+    container_name: order-service 
+    ports: 
+      - "3002:3000" 
+    environment: 
+      - DATABASE_URL=${ORDER_SERVICE_DB_URL} 
+      - RABBIT_MQ_URL=amqp://admin:adminpassword@rabbitmq:5672 
+      - NODE_ENV=development 
+    depends_on: 
+      - rabbitmq 
+    networks: 
+      - delivery_network 
+ 
+  tracking-service: 
+    build: ./tracking-notification-service 
+    container_name: tracking-service 
+    ports: 
+      - "3003:3000" 
+    environment: 
+      - DATABASE_URL=${TRACKING_SERVICE_DB_URL} 
+      - RABBIT_MQ_URL=amqp://admin:adminpassword@rabbitmq:5672 
+      - NODE_ENV=development 
+    depends_on: 
+      - rabbitmq 
+    networks: 
+      - delivery_network 
+ 
+  # payment-service: 
+  #   build: ./payment-service 
+  #   container_name: payment-service 
+  #   ports: 
+  #     - "3004:3000" 
+  #   environment: 
+  #     - DATABASE_URL=${PAYMENT_SERVICE_DB_URL} 
+  #     - RABBIT_MQ_URL=amqp://admin:adminpassword@rabbitmq:5672 
+  #     - NODE_ENV=development 
+  #   depends_on: 
+  #     - rabbitmq 
+  #   networks: 
+  #     - delivery_network 
+ 
+  # admin-service: 
+  #   build: ./admin-dashboard-service 
+  #   container_name: admin-service 
+  #   ports: 
+  #     - "3005:3000" 
+  #   environment: 
+  #     - DATABASE_URL=${ADMIN_SERVICE_DB_URL} 
+  #     - RABBIT_MQ_URL=amqp://admin:adminpassword@rabbitmq:5672 
+  #     - NODE_ENV=development 
+  #   depends_on: 
+  #     - rabbitmq 
+  #   networks: 
+  #     - delivery_network 
+ 
+volumes: 
+  rabbitmq_data: 
+ 
+networks: 
+  delivery_network: 
+    driver: bridge 

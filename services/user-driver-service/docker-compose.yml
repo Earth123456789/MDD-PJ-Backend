@@ -1,0 +1,20 @@
+# user-driver-service/docker-compose.yml
+services:
+  user-driver-service:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - RABBIT_MQ_URL=amqp://rabbitmq:5672
+      - ENABLE_RABBITMQ=true
+      - LOG_LEVEL=info
+    networks:
+      - delivery-network
+
+networks:
+  delivery-network:
+    external: true

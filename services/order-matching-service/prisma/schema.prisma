@@ -1,0 +1,104 @@
+// order-matching-service/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id                Int            @id @default(autoincrement())
+  customer_id       Int
+  pickup_location   Json           // { latitude: number, longitude: number, address: string }
+  dropoff_location  Json           // { latitude: number, longitude: number, address: string }
+  package_details   PackageDetails?
+  vehicle_id        Int?
+  driver_id         Int?
+  status            OrderStatus
+  price             Float
+  distance_km       Float
+  estimated_time_min Int
+  actual_time_min   Int?
+  payment_method    PaymentMethod
+  payment_status    PaymentStatus
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+  status_history    StatusHistory[]
+}
+
+model PackageDetails {
+  id               Int     @id @default(autoincrement())
+  order_id         Int     @unique
+  weight_kg        Float
+  volume_m3        Float?
+  length_m         Float?
+  width_m          Float?
+  height_m         Float?
+  is_fragile       Boolean @default(false)
+  special_handling String?
+  description      String?
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+}
+
+model StatusHistory {
+  id         Int         @id @default(autoincrement())
+  order_id   Int
+  status     OrderStatus
+  timestamp  DateTime    @default(now())
+  note       String?
+  
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+}
+
+model MatchingAttempt {
+  id               Int      @id @default(autoincrement())
+  order_id         Int
+  vehicle_id       Int
+  driver_id        Int
+  status           MatchingStatus
+  distance_km      Float
+  estimated_arrival_min Int
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+}
+
+enum OrderStatus {
+  PENDING        // รอการยืนยัน
+  CONFIRMED      // ยืนยันออเดอร์แล้ว
+  MATCHING       // กำลังค้นหารถ
+  MATCHED        // จับคู่กับรถแล้ว
+  DRIVER_ACCEPTED // คนขับรับออเดอร์แล้ว
+  DRIVER_REJECTED // คนขับปฏิเสธออเดอร์
+  DRIVER_ASSIGNED // คนขับรับรู้ออเดอร์และกำลังไปรับพัสดุ
+  PICKED_UP      // รับพัสดุแล้ว
+  IN_TRANSIT     // กำลังจัดส่ง
+  DELIVERED      // จัดส่งสำเร็จ
+  CANCELLED      // ยกเลิก
+  FAILED         // ล้มเหลว
+}
+
+enum MatchingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}

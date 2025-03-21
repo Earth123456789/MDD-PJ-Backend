@@ -1,0 +1,44 @@
+# order-matching-service/docker-compose.yml
+version: '3.8'
+
+services:
+  order-matching-service:
+    build: .
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - RABBIT_MQ_URL=amqp://rabbitmq:5672
+      - ENABLE_RABBITMQ=true
+      - USER_DRIVER_SERVICE_URL=http://user-driver-service:3001/api
+      - LOG_LEVEL=info
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      - delivery-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+    networks:
+      - delivery-network
+
+networks:
+  delivery-network:
+    name: delivery-network
+    external: true
+
+volumes:
+  rabbitmq-data:
