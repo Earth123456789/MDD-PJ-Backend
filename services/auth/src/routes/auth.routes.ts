@@ -4,10 +4,7 @@ import { publishMessage } from "../config/rabbitmq";
 import { validate } from "../middleware/validate";
 import { registerSchema, loginSchema } from "../validators/auth.validators";
 
-
-
 const router = Router();
-
 
 import passport from "passport";
 import jwt from "jsonwebtoken";
@@ -22,7 +19,7 @@ router.get(
     session: false,
     failureRedirect: "/api/auth/google/fail",
   }),
-  (req, res) => {
+  async (req, res) => {
     const user = req.user as any;
 
     const token = jwt.sign(
@@ -31,7 +28,21 @@ router.get(
       { expiresIn: "1h" }
     );
 
-    // ✅ ส่งกลับเป็น JSON เพื่อทดสอบ
+    // ✅ ส่ง Event ไปที่ RabbitMQ
+    try {
+      await publishMessage("auth_service_events", {
+        event: "USER_REGISTERED",
+        data: {
+          id: user.id,
+          email: user.email,
+          provider: "GOOGLE",
+        },
+      });
+    } catch (error) {
+      console.error("Error publishing Google login event:", error);
+    }
+
+    // ✅ ส่งกลับเป็น JSON
     res.json({
       message: "Google login successful",
       token,

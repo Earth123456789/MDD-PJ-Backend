@@ -41,12 +41,16 @@ export const publishMessage = async (queue: string, message: any) => {
   try {
     const msgBuffer = Buffer.from(JSON.stringify(message));
     channel.sendToQueue(queue, msgBuffer);
-    logger.info(`Published message to queue: ${queue}`);
+
+    // ✅ เพิ่ม log แสดง message ที่ส่งไป
+    logger.info(`Published message to queue: ${queue}`, message);
+
   } catch (error) {
     logger.error(`Error publishing message to queue ${queue}:`, error);
     throw error;
   }
 };
+
 
 export const closeRabbitMQConnection = async () => {
   try {

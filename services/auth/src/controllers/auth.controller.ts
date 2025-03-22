@@ -33,7 +33,7 @@ export const register = async (req: Request, res: Response) => {
     logger.info(`User registered successfully: ${email}`);
 
     // ส่ง Event ไปยัง RabbitMQ
-    await publishMessage("user_events", {
+    await publishMessage("auth_service_events", {
       event: "USER_REGISTERED",
       data: {
         id: user.id,
@@ -85,7 +85,7 @@ export const login = async (req: Request, res: Response) => {
       },
     });
 
-    await publishMessage("user_events", {
+    await publishMessage("auth_service_events", {
       event: "USER_LOGGED_IN",
       data: {
         id: user.id,
