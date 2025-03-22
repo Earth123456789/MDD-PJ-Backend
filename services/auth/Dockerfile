@@ -18,7 +18,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Expose port (เปลี่ยนให้ตรงกับแต่ละ service เช่น 5001 หรือ 3001)
-EXPOSE 3001
+EXPOSE 5001
 
 # Run migration และ start app
 CMD sh -c "npx prisma migrate deploy && npm run start"

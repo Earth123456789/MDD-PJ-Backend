@@ -1,59 +1,112 @@
-version: '3.8'
-
 services:
-  order:
+  auth-service:
     build:
-      context: ../services/order
+      context: ../services/auth
       dockerfile: Dockerfile
-    container_name: order
+    container_name: auth-service
     restart: always
-    volumes:
-      - ../services/order:/app
     ports:
-      - "3004:3004"
-    environment:
-      - DB_ENGINE=${DB_ENGINE}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=${DB_HOST_DOCKER}
-      - DB_PORT=${DB_PORT}
-      - RABBITMQ_HOST=${RABBITMQ_HOST}
-      - RABBITMQ_PORT=${RABBITMQ_PORT}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - APP_HOST=${APP_HOST}
-      - APP_PORT=${APP_PORT}
-      - DEBUG=False
+      - "5001:5001"
     env_file:
-      - ../services/order/.env
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.order.loadbalancer.server.port=3004"
-      - "traefik.http.routers.order.rule=Host(`order.localhost`)"
+      - ../services/auth/.env
+    volumes:
+      - ../services/auth:/app
+      - /app/node_modules
     depends_on:
-      - postgres
+      - auth-postgres
       - rabbitmq
     command: >
-      bash -c "aerich upgrade && uvicorn main:app --host 0.0.0.0 --port 3004"
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.routers.auth.rule=Host(`auth.localhost`)"
+      - "traefik.http.services.auth.loadbalancer.server.port=5001"
     networks:
       - traefik
 
-  postgres:
-    image: postgres:latest
-    container_name: order_service_db
+  user-driver-service:
+    build:
+      context: ../services/user-driver-service
+      dockerfile: Dockerfile
+    container_name: user-driver-service
     restart: always
     ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=${DB_NAME}
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - "3001:3001"
+    env_file:
+      - ../services/user-driver-service/.env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../services/order/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../services/user-driver-service:/app
+      - /app/node_modules
+    depends_on:
+      - user-driver-postgres
+      - rabbitmq
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.userdriver.entrypoints=web"
+      - "traefik.http.routers.userdriver.rule=Host(`user-driver.localhost`)"
+      - "traefik.http.services.userdriver.loadbalancer.server.port=3001"
     networks:
       - traefik
+
+  auth-postgres:
+    image: postgres:latest
+    container_name: auth-postgres
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  user-driver-postgres:
+    image: postgres:latest
+    container_name: user-driver-postgres
+    restart: always
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: user_driver_user
+      POSTGRES_PASSWORD: user_driver_pass
+      POSTGRES_DB: user_driver_db
+    volumes:
+      - user_driver_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=false"
 
   traefik:
     image: traefik:latest
@@ -73,27 +126,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  rabbitmq:
-    image: rabbitmq:management
-    container_name: rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=false"
-
 networks:
   traefik:
     external: true
 
 volumes:
-  postgres_data:
+  auth_postgres_data:
+  user_driver_postgres_data:
   rabbitmq_data:
