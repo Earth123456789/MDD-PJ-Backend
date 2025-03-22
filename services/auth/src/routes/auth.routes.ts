@@ -4,7 +4,51 @@ import { publishMessage } from "../config/rabbitmq";
 import { validate } from "../middleware/validate";
 import { registerSchema, loginSchema } from "../validators/auth.validators";
 
+
+
 const router = Router();
+
+
+import passport from "passport";
+import jwt from "jsonwebtoken";
+
+// เริ่มต้น OAuth
+router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+// Callback จาก Google
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: "/api/auth/google/fail",
+  }),
+  (req, res) => {
+    const user = req.user as any;
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET!,
+      { expiresIn: "1h" }
+    );
+
+    // ✅ ส่งกลับเป็น JSON เพื่อทดสอบ
+    res.json({
+      message: "Google login successful",
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+    });
+  }
+);
+
+
+// optional: ถ้า fail
+router.get("/google/fail", (req, res) => {
+  res.status(401).json({ message: "Google Login Failed" });
+});
+
 
 /**
  * @swagger

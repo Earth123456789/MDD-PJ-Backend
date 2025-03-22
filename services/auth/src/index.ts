@@ -5,6 +5,9 @@ import { setupSwagger } from "./config/swagger";
 import { connectRabbitMQ, closeRabbitMQConnection } from "./config/rabbitmq";
 import authRoutes from "./routes/auth.routes";
 import { logger } from "./utils/logger";
+import passport from "passport";
+import "./config/google.strategy"; // ✅ นำเข้า Strategy
+
 
 
 dotenv.config();
@@ -21,6 +24,8 @@ const port = process.env.PORT || 5001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
+
 
 // Setup Swagger
 setupSwagger(app);
