@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+// matching/src/modules/order/order.service.ts
+
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -6,8 +8,8 @@ import { OrderStatus, Order, Prisma } from '@prisma/client';
 import { QueueService } from '../../queue/queue.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WebsocketGateway } from '../../websocket/websocket.gateway';
+import { UserDriverValidationService } from '../../user-driver-validation.service';
 
-// Define type for order with vehicle included
 type OrderWithVehicle = Order & {
   vehicle?: {
     id: number;
@@ -16,9 +18,8 @@ type OrderWithVehicle = Order & {
   } | null;
 };
 
-// Type for status history items
 interface StatusHistoryItem {
-  status: string; 
+  status: string;
   timestamp: string;
   description: string;
 }
@@ -32,49 +33,94 @@ export class OrderService {
     private readonly queueService: QueueService,
     private readonly eventEmitter: EventEmitter2,
     private readonly websocketGateway: WebsocketGateway,
+    private readonly userDriverValidation: UserDriverValidationService,
   ) {}
 
   async create(createOrderDto: CreateOrderDto): Promise<OrderWithVehicle> {
     this.logger.log(`Creating new order: ${JSON.stringify(createOrderDto)}`);
 
-    // Convert DTO to Prisma-compatible format
-    const orderData: Prisma.OrderCreateInput = {
-      // Map scalar fields directly
-      user_id: createOrderDto.user_id,
-      package_weight_kg: createOrderDto.package_weight_kg,
-      package_volume_m3: createOrderDto.package_volume_m3,
-      package_length_m: createOrderDto.package_length_m,
-      package_width_m: createOrderDto.package_width_m,
-      package_height_m: createOrderDto.package_height_m,
-      status: createOrderDto.status || OrderStatus.PENDING,
+    try {
+      // First, validate that the user exists in the user-driver service
+      const userExists = await this.userDriverValidation.validateUser(
+        createOrderDto.user_id,
+      );
 
-      // Convert LocationDto objects to JSON
-      pickup_location:
-        createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
-      dropoff_location:
-        createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
-    };
+      if (!userExists) {
+        this.logger.warn(
+          `User with ID ${createOrderDto.user_id} does not exist in the user-driver service`,
+        );
+        throw new HttpException(
+          `User with ID ${createOrderDto.user_id} does not exist`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-    // Create the order in the database
-    const order = await this.prisma.order.create({
-      data: orderData,
-      include: {
-        vehicle: true,
-      },
-    });
+      // Fetch user info to include in logs and messages
+      const userInfo: any = await this.userDriverValidation.getUserInfo(
+        createOrderDto.user_id,
+      );
 
-    // Emit event
-    this.eventEmitter.emit('order.created', order);
+      // Convert DTO to Prisma-compatible format with guaranteed status value
+      const orderData: Prisma.OrderCreateInput = {
+        // Map scalar fields directly
+        user_id: createOrderDto.user_id,
+        package_weight_kg: createOrderDto.package_weight_kg,
+        package_volume_m3: createOrderDto.package_volume_m3,
+        package_length_m: createOrderDto.package_length_m,
+        package_width_m: createOrderDto.package_width_m,
+        package_height_m: createOrderDto.package_height_m,
+        status: createOrderDto.status || OrderStatus.PENDING, // Ensure status is always defined
 
-    // Send to queue for further processing
-    await this.queueService.sendToQueue('order-created', {
-      orderId: order.id,
-      userId: order.user_id,
-      status: order.status,
-      timestamp: new Date().toISOString(),
-    });
+        // Convert LocationDto objects to JSON
+        pickup_location:
+          createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
+        dropoff_location:
+          createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
+      };
 
-    return order;
+      // Create the order in the database
+      const order = await this.prisma.order.create({
+        data: orderData,
+        include: {
+          vehicle: true,
+        },
+      });
+
+      // Emit event
+      this.eventEmitter.emit('order.created', order);
+
+      // Send to queue for further processing
+      await this.queueService.sendToQueue('order-created', {
+        orderId: order.id,
+        userId: order.user_id,
+        userName: userInfo?.full_name || null,
+        userEmail: userInfo?.email || null,
+        status: order.status,
+        pickupLocation: order.pickup_location,
+        dropoffLocation: order.dropoff_location,
+        packageDetails: {
+          weight: order.package_weight_kg,
+          volume: order.package_volume_m3,
+          dimensions: {
+            length: order.package_length_m,
+            width: order.package_width_m,
+            height: order.package_height_m,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return order;
+    } catch (error) {
+      this.logger.error(`Error creating order: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'An error occurred while creating the order',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   async findAll(filters: {
@@ -91,6 +137,21 @@ export class OrderService {
     }
 
     if (userId) {
+      // Optionally validate user exists
+      try {
+        const userExists = await this.userDriverValidation.validateUser(
+          Number(userId),
+        );
+        if (!userExists) {
+          this.logger.warn(
+            `Attempting to filter orders by non-existent user ID: ${userId}`,
+          );
+          // We'll still perform the query, but log the warning
+        }
+      } catch (error) {
+        this.logger.warn(`Error validating user ${userId}: ${error.message}`);
+      }
+
       where.user_id = Number(userId);
     }
 
@@ -132,26 +193,93 @@ export class OrderService {
       throw new Error(`Order in ${order.status} state cannot be updated`);
     }
 
+    // If changing user_id, validate that the new user exists
+    if (
+      updateOrderDto.user_id !== undefined &&
+      updateOrderDto.user_id !== order.user_id
+    ) {
+      const userExists = await this.userDriverValidation.validateUser(
+        updateOrderDto.user_id,
+      );
+      if (!userExists) {
+        this.logger.warn(
+          `User with ID ${updateOrderDto.user_id} does not exist in the user-driver service`,
+        );
+        throw new HttpException(
+          `User with ID ${updateOrderDto.user_id} does not exist`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     this.logger.log(`Updating order ${id}: ${JSON.stringify(updateOrderDto)}`);
 
     // Create a proper update input for Prisma that handles relationships correctly
-    const updateData: Prisma.OrderUpdateInput = {
-      user_id: updateOrderDto.user_id,
-      pickup_location: updateOrderDto.pickup_location as any,
-      dropoff_location: updateOrderDto.dropoff_location as any,
-      package_weight_kg: updateOrderDto.package_weight_kg,
-      package_volume_m3: updateOrderDto.package_volume_m3,
-      package_length_m: updateOrderDto.package_length_m,
-      package_width_m: updateOrderDto.package_width_m,
-      package_height_m: updateOrderDto.package_height_m,
-      status: updateOrderDto.status,
-    };
+    // and ensures all fields have the proper types
+    const updateData: Prisma.OrderUpdateInput = {};
+
+    // Only add fields that are defined in the updateOrderDto
+    if (updateOrderDto.user_id !== undefined) {
+      updateData.user_id = updateOrderDto.user_id;
+    }
+
+    if (updateOrderDto.pickup_location) {
+      updateData.pickup_location = updateOrderDto.pickup_location as any;
+    }
+
+    if (updateOrderDto.dropoff_location) {
+      updateData.dropoff_location = updateOrderDto.dropoff_location as any;
+    }
+
+    if (updateOrderDto.package_weight_kg !== undefined) {
+      updateData.package_weight_kg = updateOrderDto.package_weight_kg;
+    }
+
+    if (updateOrderDto.package_volume_m3 !== undefined) {
+      updateData.package_volume_m3 = updateOrderDto.package_volume_m3;
+    }
+
+    if (updateOrderDto.package_length_m !== undefined) {
+      updateData.package_length_m = updateOrderDto.package_length_m;
+    }
+
+    if (updateOrderDto.package_width_m !== undefined) {
+      updateData.package_width_m = updateOrderDto.package_width_m;
+    }
+
+    if (updateOrderDto.package_height_m !== undefined) {
+      updateData.package_height_m = updateOrderDto.package_height_m;
+    }
+
+    if (updateOrderDto.status !== undefined) {
+      updateData.status = updateOrderDto.status;
+    }
 
     // Handle vehicle relationship properly
     if (updateOrderDto.vehicle_matched !== undefined) {
       if (updateOrderDto.vehicle_matched === null) {
         updateData.vehicle = { disconnect: true };
       } else {
+        // Validate that the vehicle exists and has a valid driver
+        try {
+          const vehicle = await this.prisma.vehicle.findUnique({
+            where: { id: updateOrderDto.vehicle_matched },
+          });
+
+          if (vehicle && vehicle.driver_id) {
+            const driverExists = await this.userDriverValidation.validateDriver(
+              vehicle.driver_id,
+            );
+            if (!driverExists) {
+              this.logger.warn(
+                `Vehicle ${updateOrderDto.vehicle_matched} has a driver (${vehicle.driver_id}) that does not exist in the user-driver service`,
+              );
+            }
+          }
+        } catch (error) {
+          this.logger.warn(`Error validating vehicle driver: ${error.message}`);
+        }
+
         updateData.vehicle = {
           connect: { id: updateOrderDto.vehicle_matched },
         };
@@ -176,6 +304,7 @@ export class OrderService {
       // Send to queue
       await this.queueService.sendToQueue('order-status-changed', {
         orderId: updatedOrder.id,
+        userId: updatedOrder.user_id,
         status: updatedOrder.status,
         previousStatus: order.status,
         timestamp: new Date().toISOString(),
@@ -227,9 +356,17 @@ export class OrderService {
     // Notify via WebSocket
     this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
 
+    // Get user info for messaging
+    const userInfo: any = await this.userDriverValidation.getUserInfo(
+      order.user_id,
+    );
+
     // Send to queue
     await this.queueService.sendToQueue('order-status-changed', {
       orderId: updatedOrder.id,
+      userId: updatedOrder.user_id,
+      userName: userInfo?.full_name || null,
+      userEmail: userInfo?.email || null,
       status: updatedOrder.status,
       previousStatus: order.status,
       timestamp: new Date().toISOString(),
@@ -240,7 +377,7 @@ export class OrderService {
 
   async cancel(id: number): Promise<void> {
     // Check if order exists
-    const order = await this.findOne(id.toString()); // Convert number to string for findOne()
+    const order = await this.findOne(id.toString());
 
     if (!order) {
       throw new Error('Order not found');
@@ -279,9 +416,17 @@ export class OrderService {
     // Notify via WebSocket
     this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
 
+    // Get user info for messaging
+    const userInfo: any = await this.userDriverValidation.getUserInfo(
+      order.user_id,
+    );
+
     // Send to queue
     await this.queueService.sendToQueue('order-status-changed', {
       orderId: updatedOrder.id,
+      userId: updatedOrder.user_id,
+      userName: userInfo?.full_name || null,
+      userEmail: userInfo?.email || null,
       status: updatedOrder.status,
       previousStatus: order.status,
       action: 'cancelled',
@@ -297,6 +442,20 @@ export class OrderService {
       throw new Error('Order not found');
     }
 
+    // Validate that the user exists
+    const userExists = await this.userDriverValidation.validateUser(
+      order.user_id,
+    );
+    if (!userExists) {
+      this.logger.warn(
+        `User with ID ${order.user_id} does not exist in the user-driver service`,
+      );
+      throw new HttpException(
+        `User with ID ${order.user_id} does not exist`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     // Only allow matching for PENDING or MATCHING status
     if (!['PENDING', 'MATCHING'].includes(order.status)) {
       throw new Error(`Order in ${order.status} state cannot be matched`);
@@ -307,11 +466,25 @@ export class OrderService {
     // Update status to MATCHING
     const updatedOrder = await this.updateStatus(id, OrderStatus.MATCHING);
 
+    // Get user info for messaging
+    const userInfo = await this.userDriverValidation.getUserInfo(order.user_id);
+
     // Send to matching queue for processing
-    await this.queueService.sendToQueue('order-created', {
+    await this.queueService.sendToQueue('order-matching', {
       orderId: order.id,
       userId: order.user_id,
+      userName: userInfo?.full_name || null,
+      userEmail: userInfo?.email || null,
       status: OrderStatus.MATCHING,
+      packageDetails: {
+        weight: order.package_weight_kg,
+        volume: order.package_volume_m3,
+        dimensions: {
+          length: order.package_length_m,
+          width: order.package_width_m,
+          height: order.package_height_m,
+        },
+      },
       timestamp: new Date().toISOString(),
     });
 
@@ -391,19 +564,42 @@ export class OrderService {
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
     );
 
+    // Get driver and vehicle information if matched
+    let driverInfo: any = null;
+    let vehicleDetails: any = null;
+
+    if (order.vehicle_matched && order.vehicle) {
+      vehicleDetails = {
+        id: order.vehicle.id,
+        type: order.vehicle.vehicle_type,
+        driverId: order.vehicle.driver_id,
+      };
+
+      // Get driver details from user-driver service if we have a driver ID
+      if (order.vehicle.driver_id) {
+        try {
+          driverInfo = await this.userDriverValidation.getDriverInfo(
+            order.vehicle.driver_id,
+          );
+        } catch (error) {
+          this.logger.warn(`Error getting driver info: ${error.message}`);
+        }
+      }
+    }
+
     return {
       orderId: order.id,
       currentStatus: order.status,
       statusHistory: mockStatusHistory,
       estimatedDelivery: this.getEstimatedDelivery(order),
-      vehicleDetails:
-        order.vehicle_matched && order.vehicle
-          ? {
-              id: order.vehicle.id,
-              type: order.vehicle.vehicle_type,
-              driverId: order.vehicle.driver_id,
-            }
-          : null,
+      vehicleDetails,
+      driverInfo: driverInfo
+        ? {
+            name: driverInfo?.user?.full_name || null,
+            phone: driverInfo?.user?.phone || null,
+            rating: driverInfo?.rating || null,
+          }
+        : null,
       // In a real implementation, this would include current location info
       currentLocation:
         order.vehicle_matched && order.status === OrderStatus.IN_TRANSIT

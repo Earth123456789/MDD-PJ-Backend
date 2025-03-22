@@ -47,7 +47,7 @@ RUN npx prisma generate
 COPY --from=build /app/dist ./dist
 
 # Expose the application port
-EXPOSE 3001
+EXPOSE 3002
 
 # Ensure NestJS CLI is installed
 RUN npm install -g @nestjs/cli

@@ -1,27 +1,13 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-enum VehicleType {
-  TRUCK
-  VAN
-  PICKUP
-  MOTORCYCLE
-}
-
-enum VehicleStatus {
-  AVAILABLE
-  UNAVAILABLE
-  MAINTENANCE
-  ASSIGNED
+generator client {
+  provider = "prisma-client-js"
 }
 
 enum OrderStatus {
@@ -33,11 +19,47 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum VehicleStatus {
+  AVAILABLE
+  ASSIGNED
+  IN_TRANSIT
+  MAINTENANCE
+  INACTIVE
+}
+
+enum VehicleType {
+  CAR
+  VAN
+  TRUCK
+  MOTORCYCLE
+}
+
+model Order {
+  id               Int         @id @default(autoincrement())
+  user_id          Int
+  pickup_location  Json
+  dropoff_location Json
+  package_weight_kg Float
+  package_volume_m3 Float
+  package_length_m  Float
+  package_width_m   Float
+  package_height_m  Float
+  status           OrderStatus @default(PENDING)
+  vehicle_matched  Int?
+  vehicle          Vehicle?    @relation(fields: [vehicle_matched], references: [id])
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  
+  // Relations
+  matchingScores   MatchingScore[]
+  matchingAttempts MatchingAttempt[]
+}
+
 model Vehicle {
   id             Int           @id @default(autoincrement())
   driver_id      Int
   vehicle_type   VehicleType
-  max_weight_kg  Int
+  max_weight_kg  Float
   max_volume_m3  Float
   length_m       Float
   width_m        Float
@@ -45,28 +67,38 @@ model Vehicle {
   status         VehicleStatus @default(AVAILABLE)
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
+  
+  // Relations
   orders         Order[]
-
-  @@index([vehicle_type, status])
-  @@index([max_weight_kg, max_volume_m3])
+  matchingScores MatchingScore[]
+  matchingAttempts MatchingAttempt[]
 }
 
-model Order {
-  id             Int           @id @default(autoincrement())
-  user_id           Int
-  pickup_location   Json
-  dropoff_location  Json
-  package_weight_kg Int
-  package_volume_m3 Float
-  package_length_m  Float
-  package_width_m   Float
-  package_height_m  Float
-  vehicle_matched   Int?
-  status            OrderStatus  @default(PENDING)
-  created_at        DateTime     @default(now())
-  updated_at        DateTime     @updatedAt
-  vehicle           Vehicle?     @relation(fields: [vehicle_matched], references: [id])
+model MatchingScore {
+  id              Int      @id @default(autoincrement())
+  order_id        Int
+  vehicle_id      Int
+  weight_score    Float
+  volume_score    Float
+  dimension_score Float
+  total_score     Float
+  created_at      DateTime @default(now())
+  
+  // Relations
+  order           Order    @relation(fields: [order_id], references: [id])
+  vehicle         Vehicle  @relation(fields: [vehicle_id], references: [id])
+}
 
-  @@index([status])
-  @@index([package_weight_kg, package_volume_m3])
+model MatchingAttempt {
+  id             Int      @id @default(autoincrement())
+  order_id       Int
+  vehicle_id     Int
+  algorithm_used String
+  score          Float
+  status         String
+  created_at     DateTime @default(now())
+  
+  // Relations
+  order          Order    @relation(fields: [order_id], references: [id])
+  vehicle        Vehicle  @relation(fields: [vehicle_id], references: [id])
 }

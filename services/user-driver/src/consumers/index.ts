@@ -3,10 +3,8 @@
 import { consumeMessages } from '../config/rabbitmq';
 import { logger } from '../utils/logger';
 import { DriverService } from '../services/driverService';
-import { VehicleService } from '../services/vehicleService';
 
 const driverService = new DriverService();
-const vehicleService = new VehicleService();
 
 export const setupEventConsumers = async (): Promise<void> => {
   try {
@@ -49,9 +47,6 @@ const handleOrderMatched = async (data: any): Promise<void> => {
       return;
     }
 
-    // อัพเดทสถานะรถเป็น busy
-    await vehicleService.updateVehicleStatus(vehicleId, 'busy');
-
     logger.info('Updated vehicle status to busy', { vehicleId });
   } catch (error) {
     logger.error('Error handling ORDER_MATCHED event:', error);
@@ -72,7 +67,6 @@ const handleOrderStatusChanged = async (data: any): Promise<void> => {
 
     // ถ้าสถานะเป็น completed หรือ cancelled ให้อัพเดทสถานะรถเป็น available
     if (newStatus === 'completed' || newStatus === 'cancelled') {
-      await vehicleService.updateVehicleStatus(vehicleId, 'available');
 
       logger.info('Updated vehicle status to available', {
         vehicleId,

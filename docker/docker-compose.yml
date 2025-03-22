@@ -6,7 +6,6 @@ networks:
 
 volumes:
   postgres_data:
-  redis_data:
   elasticsearch_data:
   rabbitmq_data:
 
@@ -22,7 +21,6 @@ services:
       - "3002:3002" 
     depends_on:
       - postgres
-      # - redis
       - rabbitmq
       - elasticsearch
     env_file:
@@ -37,7 +35,7 @@ services:
       - "traefik.docker.network=traefik"
       - "traefik.http.routers.matching.entrypoints=web"
       - "traefik.http.routers.matching.rule=Host(`matching.localhost`)"
-      - "traefik.http.services.matching-service.loadbalancer.server.port=3002"
+      - "traefik.http.services.matching.loadbalancer.server.port=3002"
     command: >
       bash -c "
         sleep 15 &&
@@ -48,9 +46,9 @@ services:
     # User
   user-driver-service:
     build:
-      context: ../services/user-driver-service
+      context: ../services/user-driver
       dockerfile: Dockerfile 
-    container_name: user-driver-service
+    container_name: user-driver
     restart: always
     ports:
       - "3001:3001" 
@@ -58,9 +56,9 @@ services:
       - rabbitmq
       - elasticsearch 
     env_file:
-      - ../services/user-driver-service/.env
+      - ../services/user-driver/.env
     volumes:
-      - ../services/user-driver-service:/app
+      - ../services/user-driver:/app
       - /app/node_modules
     networks:
       - traefik
@@ -69,7 +67,7 @@ services:
       - "traefik.docker.network=traefik"
       - "traefik.http.routers.user-driver.entrypoints=web"
       - "traefik.http.routers.user-driver.rule=Host(`user-driver.localhost`)"
-      - "traefik.http.services.user-driver-service.loadbalancer.server.port=3001"
+      - "traefik.http.services.user-driver.loadbalancer.server.port=3001"
     command: >
       sh -c "
         npx prisma generate &&
@@ -99,7 +97,7 @@ services:
       - "traefik.http.routers.postgres.rule=Host(`postgres.localhost`)"
       - "traefik.http.services.postgres.loadbalancer.server.port=5432"
 
-  # PgAdmin - PostgreSQL UI
+  # PgAdmin - PostgreSQL UI (When Deploy in Cloud)
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin

@@ -45,29 +45,3 @@ enum DriverStatus {
   suspended
 }
 
-model Vehicle {
-  id            Int           @id @default(autoincrement())
-  driver_id     Int
-  vehicle_type  VehicleType
-  max_weight_kg Int
-  max_volume_m3 Float
-  length_m      Float
-  width_m       Float
-  height_m      Float
-  status        VehicleStatus
-  created_at    DateTime      @default(now())
-  updated_at    DateTime      @updatedAt
-}
-
-enum VehicleType {
-  motorcycle
-  car
-  pickup
-  truck
-}
-
-enum VehicleStatus {
-  available
-  busy
-  offline
-}
