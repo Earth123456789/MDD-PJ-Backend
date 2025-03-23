@@ -10,7 +10,7 @@ volumes:
   rabbitmq_data:
 
 services:
-  # NestJS Application
+  # Matching
   matching-service:
     build:
       context: ../services/matching
@@ -74,6 +74,91 @@ services:
         npx prisma migrate deploy &&
         npm run start
       "
+  
+  # tracking-notification
+  # tracking-notification-service:
+  #   build:
+  #     context: ../services/tracking-notification
+  #     dockerfile: Dockerfile 
+  #   container_name: tracking-notification
+  #   restart: always
+  #   ports:
+  #     - "3004:3004" 
+  #   depends_on:
+  #     - rabbitmq
+  #     - elasticsearch 
+  #   env_file:
+  #     - ../services/tracking-notification/.env
+  #   volumes:
+  #     - ../services/tracking-notification:/app
+  #     - /app/node_modules
+  #   networks:
+  #     - traefik
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=traefik"
+  #     - "traefik.http.routers.tracking-notification.entrypoints=web"
+  #     - "traefik.http.routers.tracking-notification.rule=Host(`tracking-notification.localhost`)"
+  #     - "traefik.http.services.tracking-notification.loadbalancer.server.port=3004"
+  #   command: >
+  #     sh -c "
+  #       npx prisma generate &&
+  #       npx prisma migrate deploy &&
+  #       npm run start
+  #     "
+  
+  # Payment
+  payment-service:
+    build:
+      context: ../services/payment
+      dockerfile: Dockerfile
+    container_name: payment-service
+    restart: always
+    ports:
+      - "3003:3003" 
+    depends_on:
+      - postgres
+      - rabbitmq
+      - elasticsearch
+      - redis
+    env_file:
+      - ../services/payment/.env
+    volumes:
+      - ../services/payment:/app
+      - /app/node_modules
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.payment.entrypoints=web"
+      - "traefik.http.routers.payment.rule=Host(`payment.localhost`)"
+      - "traefik.http.services.payment.loadbalancer.server.port=3003"
+    command: >
+      bash -c "
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start:dev
+      "
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis.entrypoints=web"
+      - "traefik.http.routers.redis.rule=Host(`redis.localhost`)"
+      - "traefik.http.services.redis.loadbalancer.server.port=6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
     
   # PostgreSQL Database
