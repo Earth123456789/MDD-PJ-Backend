@@ -1,8 +1,6 @@
-
 import express from 'express';
 import userRoutes from './userRoutes';
 import driverRoutes from './driverRoutes';
-import vehicleRoutes from './vehicleRoutes';
 
 const router = express.Router();
 
@@ -14,6 +12,5 @@ router.get('/', (req, res) => {
 // Module routes
 router.use('/users', userRoutes);
 router.use('/drivers', driverRoutes);
-router.use('/vehicles', vehicleRoutes);
 
 export default router;

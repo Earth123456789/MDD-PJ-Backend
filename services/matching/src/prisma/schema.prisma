@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VehicleType {
+  TRUCK
+  VAN
+  PICKUP
+  MOTORCYCLE
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  UNAVAILABLE
+  MAINTENANCE
+  ASSIGNED
+}
+
+enum OrderStatus {
+  PENDING
+  MATCHING
+  MATCHED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+model Vehicle {
+  id             Int           @id @default(autoincrement())
+  driver_id      Int
+  vehicle_type   VehicleType
+  max_weight_kg  Int
+  max_volume_m3  Float
+  length_m       Float
+  width_m        Float
+  height_m       Float
+  status         VehicleStatus @default(AVAILABLE)
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  orders         Order[]
+
+  @@index([vehicle_type, status])
+  @@index([max_weight_kg, max_volume_m3])
+}
+
+model Order {
+  id             Int           @id @default(autoincrement())
+  user_id           Int
+  pickup_location   Json
+  dropoff_location  Json
+  package_weight_kg Int
+  package_volume_m3 Float
+  package_length_m  Float
+  package_width_m   Float
+  package_height_m  Float
+  vehicle_matched   Int?
+  status            OrderStatus  @default(PENDING)
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+  vehicle           Vehicle?     @relation(fields: [vehicle_matched], references: [id])
+
+  @@index([status])
+  @@index([package_weight_kg, package_volume_m3])
+}
