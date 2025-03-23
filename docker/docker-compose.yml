@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   auth-service:
     build:
@@ -61,6 +63,38 @@ services:
     networks:
       - traefik
 
+  matching-service:
+    build:
+      context: ../services/matching
+      dockerfile: Dockerfile
+    container_name: matching-service
+    restart: always
+    ports:
+      - "3002:3002"
+    env_file:
+      - ../services/matching/.env
+    volumes:
+      - ../services/matching:/app
+      - /app/node_modules
+    depends_on:
+      - matching-postgres
+      - rabbitmq
+      - redis
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.matching.entrypoints=web"
+      - "traefik.http.routers.matching.rule=Host(`matching.localhost`)"
+      - "traefik.http.services.matching.loadbalancer.server.port=3002"
+    networks:
+      - traefik
+
   auth-postgres:
     image: postgres:latest
     container_name: auth-postgres
@@ -91,6 +125,21 @@ services:
     networks:
       - traefik
 
+  matching-postgres:
+    image: postgres:latest
+    container_name: matching-postgres
+    restart: always
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vehicle_matching
+    volumes:
+      - matching_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
   rabbitmq:
     image: rabbitmq:management
     container_name: rabbitmq
@@ -107,6 +156,15 @@ services:
       - traefik
     labels:
       - "traefik.enable=false"
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - traefik
 
   traefik:
     image: traefik:latest
@@ -133,4 +191,5 @@ networks:
 volumes:
   auth_postgres_data:
   user_driver_postgres_data:
+  matching_postgres_data:
   rabbitmq_data:

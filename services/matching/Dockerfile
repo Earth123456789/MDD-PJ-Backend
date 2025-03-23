@@ -1,56 +1,47 @@
 # Base image
-FROM node:latest AS base
-
-# Create app directory
+FROM node:18-alpine AS base
 WORKDIR /app
 
-# Install dependencies
+# --------------------------------------------
+# Dependencies Layer (ใช้ cache ได้)
 FROM base AS dependencies
 
-# Copy package files
 COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
 
-# Install all dependencies (including dev)
-RUN npm ci
-
-# Build the application
+# --------------------------------------------
+# Build Layer
 FROM dependencies AS build
 
-# Copy source code
+# Copy all source code AFTER dependencies
 COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build the NestJS application
+# Build NestJS app
 RUN npm run build
 
-# Production image
-FROM base AS production
+# --------------------------------------------
+# Production Image
+FROM node:18-alpine AS production
 
-# Set environment variables
+WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy package files
-COPY package.json package-lock.json ./
-
 # Install only production dependencies
-RUN npm ci --omit=dev
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --legacy-peer-deps
 
-# Copy Prisma schema
+# Copy prisma schema & generate client
 COPY prisma ./prisma/
-
-# Generate Prisma client
 RUN npx prisma generate
 
-# Copy built application
+# Copy compiled code from build stage
 COPY --from=build /app/dist ./dist
 
-# Expose the application port
+# Expose app port
 EXPOSE 3002
 
-# Ensure NestJS CLI is installed
-RUN npm install -g @nestjs/cli
-
-# Command to run the application
-CMD ["npm", "run", "start"]
+# Start the app
+CMD ["node", "dist/main"]

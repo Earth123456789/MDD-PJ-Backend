@@ -1,4 +1,3 @@
-import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -9,6 +8,10 @@ import { OrderModule } from './modules/order/order.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
+
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { AuthMiddleware } from './middleware/auth.middleware';
+
 
 @Module({
   imports: [
@@ -40,4 +43,10 @@ import { QueueModule } from './queue/queue.module';
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AuthMiddleware)
+      .forRoutes('order', 'vehicle', 'matching'); // 🔒 Protect ทุก route ที่ขึ้นต้นด้วย /order
+  }
+}
