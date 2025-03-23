@@ -8,6 +8,7 @@ import { QueueService } from '../../queue/queue.service';
 import { WebsocketGateway } from '../../websocket/websocket.gateway';
 import { UserDriverValidationService } from '../../user-driver-validation.service';
 import { HttpModule } from '@nestjs/axios';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { HttpModule } from '@nestjs/axios';
     PrismaService,
     QueueService,
     WebsocketGateway,
-    UserDriverValidationService, // Add our new service
+    UserDriverValidationService,
+    JwtAuthGuard,
   ],
   exports: [MatchingService],
 })

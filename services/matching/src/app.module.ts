@@ -10,7 +10,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
 
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AuthMiddleware } from './middleware/auth.middleware';
+import { AuthMiddleware } from './guards/auth.middleware';
 
 
 @Module({

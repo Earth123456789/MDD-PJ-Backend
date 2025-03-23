@@ -7,6 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { QueueService } from '../../queue/queue.service';
 import { UserDriverValidationService } from '../../user-driver-validation.service';
 import { HttpModule } from '@nestjs/axios';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+
 
 @Module({
   imports: [
@@ -17,7 +19,8 @@ import { HttpModule } from '@nestjs/axios';
     VehicleService,
     PrismaService,
     QueueService,
-    UserDriverValidationService, // Add our new service
+    UserDriverValidationService,
+    JwtAuthGuard,
   ],
   exports: [VehicleService],
 })

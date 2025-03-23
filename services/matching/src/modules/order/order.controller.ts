@@ -21,7 +21,10 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @ApiTags('orders')
 @Controller('orders')
 export class OrderController {
