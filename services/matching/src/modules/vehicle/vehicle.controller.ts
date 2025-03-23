@@ -23,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { VehicleType, VehicleStatus } from '@prisma/client';
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('vehicles')

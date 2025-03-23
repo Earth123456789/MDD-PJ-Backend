@@ -18,7 +18,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/guards/jwt-auth.guard'; // ✅ แก้ path ให้ถูกกับโครงสร้างจริง
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard'; 
 
 
 @UseGuards(JwtAuthGuard)
