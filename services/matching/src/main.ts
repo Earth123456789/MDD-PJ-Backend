@@ -56,6 +56,7 @@ async function bootstrap() {
     .addTag('matching')
     .addTag('WebSockets')
     .addTag('WebSocket Documentation')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -3,11 +3,12 @@
 import { Module } from '@nestjs/common';
 import { MatchingController } from './matching.controller';
 import { MatchingService } from './matching.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { QueueService } from '../../queue/queue.service';
-import { WebsocketGateway } from '../../websocket/websocket.gateway';
-import { UserDriverValidationService } from '../../user-driver-validation.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { QueueService } from 'src/queue/queue.service';
+import { WebsocketGateway } from 'src/websocket/websocket.gateway';
+import { UserDriverValidationService } from 'src/user-driver-validation.service';
 import { HttpModule } from '@nestjs/axios';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { HttpModule } from '@nestjs/axios';
     PrismaService,
     QueueService,
     WebsocketGateway,
-    UserDriverValidationService, // Add our new service
+    UserDriverValidationService,
+    JwtAuthGuard,
   ],
   exports: [MatchingService],
 })

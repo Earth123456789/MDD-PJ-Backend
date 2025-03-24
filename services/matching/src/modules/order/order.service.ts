@@ -5,10 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderStatus, Order, Prisma } from '@prisma/client';
-import { QueueService } from '../../queue/queue.service';
+import { QueueService } from 'src/queue/queue.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { WebsocketGateway } from '../../websocket/websocket.gateway';
-import { UserDriverValidationService } from '../../user-driver-validation.service';
+import { WebsocketGateway } from 'src/websocket/websocket.gateway';
+import { UserDriverValidationService } from 'src/user-driver-validation.service';
 
 type OrderWithVehicle = Order & {
   vehicle?: {

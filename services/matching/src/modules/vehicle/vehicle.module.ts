@@ -3,10 +3,11 @@
 import { Module } from '@nestjs/common';
 import { VehicleController } from './vehicle.controller';
 import { VehicleService } from './vehicle.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { QueueService } from '../../queue/queue.service';
-import { UserDriverValidationService } from '../../user-driver-validation.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { QueueService } from 'src/queue/queue.service';
+import { UserDriverValidationService } from 'src/user-driver-validation.service';
 import { HttpModule } from '@nestjs/axios';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { HttpModule } from '@nestjs/axios';
     VehicleService,
     PrismaService,
     QueueService,
-    UserDriverValidationService, // Add our new service
+    UserDriverValidationService,
+    JwtAuthGuard,
   ],
   exports: [VehicleService],
 })

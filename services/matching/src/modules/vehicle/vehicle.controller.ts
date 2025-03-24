@@ -20,11 +20,16 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { VehicleType, VehicleStatus } from '@prisma/client';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @ApiTags('vehicles')
 @Controller('vehicles')
+@ApiBearerAuth('JWT-auth')
 export class VehicleController {
   constructor(private readonly vehicleService: VehicleService) {}
 

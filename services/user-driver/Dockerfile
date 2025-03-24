@@ -29,5 +29,5 @@ RUN npm run build
 
 EXPOSE 3001
 
-# Start the application
-CMD ["npm", "start"]
+# Ensure RabbitMQ is available before starting the app
+CMD ["sh", "-c", "npm start"]

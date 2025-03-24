@@ -1,6 +1,6 @@
 import { Module, Global } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import { WebsocketModule } from '../websocket/websocket.module';
+import { WebsocketModule } from 'src/websocket/websocket.module';
 
 @Global()
 @Module({

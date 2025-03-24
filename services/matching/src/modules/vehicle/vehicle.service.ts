@@ -1,13 +1,13 @@
 // matching/src/modules/vehicle/vehicle.service.ts
 
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { VehicleStatus, Vehicle, Order } from '@prisma/client';
-import { QueueService } from '../../queue/queue.service';
+import { QueueService } from 'src/queue/queue.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { UserDriverValidationService } from '../../user-driver-validation.service';
+import { UserDriverValidationService } from 'src/user-driver-validation.service';
 
 interface DriverWithDistance {
   id: number;

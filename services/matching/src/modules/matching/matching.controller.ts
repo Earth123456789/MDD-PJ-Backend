@@ -16,10 +16,15 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard'; // ✅ แก้ path ให้ถูกกับโครงสร้างจริง
 
+@UseGuards(JwtAuthGuard)
 @ApiTags('matching')
 @Controller('matching')
+@ApiBearerAuth('JWT-auth')
 export class MatchingController {
   private readonly logger = new Logger(MatchingController.name);
 
