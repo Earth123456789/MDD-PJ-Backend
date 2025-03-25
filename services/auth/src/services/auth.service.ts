@@ -1,22 +1,14 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { publishMessage } from "../config/rabbitmq";
 import { logger } from "../utils/logger";
-
 import { PrismaClient } from "@prisma/client";
+import { TokenService } from "./token.service";
 
 const prisma = new PrismaClient();
 export { prisma };
 
-const JWT_SECRET: string = process.env.JWT_SECRET as string;
-const JWT_EXPIRES_IN = 3600;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not defined in .env file");
-}
-
 /**
- * ลงทะเบียนผู้ใช้ใหม่
+ * ✅ ลงทะเบียนผู้ใช้ใหม่
  */
 export const registerUser = async (email: string, password: string) => {
   try {
@@ -53,7 +45,7 @@ export const registerUser = async (email: string, password: string) => {
 };
 
 /**
- * เข้าสู่ระบบและสร้าง JWT Token
+ * ✅ เข้าสู่ระบบและสร้าง JWT Token (RS256)
  */
 export const loginUser = async (email: string, password: string) => {
   try {
@@ -73,14 +65,13 @@ export const loginUser = async (email: string, password: string) => {
       throw new Error("Invalid email or password");
     }
 
-    // ✅ สร้าง JWT Token โดยแน่ใจว่ามีค่า `JWT_SECRET`
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    // ✅ สร้าง JWT Token และ Refresh Token ด้วย RS256
+    const token = TokenService.generateToken(user.id, user.email);
+    const refreshToken = TokenService.generateRefreshToken(user.id);
 
     logger.info(`User logged in successfully: ${email}`);
 
-    return { token, userId: user.id };
+    return { token, refreshToken, userId: user.id };
   } catch (error) {
     logger.error("Error logging in user:", error);
     throw error;
