@@ -1,0 +1,94 @@
+// payment-service/prisma/schema.prisma
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  QR_CODE
+  CREDIT_CARD
+  BANK_TRANSFER
+  WALLET
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  order_id       Int
+  amount         Float
+  currency       String        @default("THB")
+  payment_method PaymentMethod @default(QR_CODE)
+  status         PaymentStatus @default(PENDING)
+  qr_code_url    String?
+  transaction_id String?       @unique
+  driver_id      Int?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  
+  // Relations
+  driverAccount  DriverBankAccount? @relation(fields: [driver_account_id], references: [id])
+  driver_account_id Int?
+  paymentLogs    PaymentLog[]
+}
+
+model DriverBankAccount {
+  id                Int       @id @default(autoincrement())
+  driver_id         Int       @unique
+  bank_name         String
+  account_number    String
+  account_holder    String
+  routing_number    String?
+  swift_code        String?
+  balance           Float     @default(0)
+  currency          String    @default("THB")
+  is_default        Boolean   @default(true)
+  is_verified       Boolean   @default(false)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  
+  // Relations
+  payments          Payment[]
+  paymentTransactions PaymentTransaction[]
+}
+
+model PaymentTransaction {
+  id                Int       @id @default(autoincrement())
+  amount            Float
+  currency          String    @default("THB")
+  description       String?
+  transaction_type  String    // DEPOSIT, WITHDRAWAL, TRANSFER
+  status            String    // PENDING, COMPLETED, FAILED
+  external_ref_id   String?
+  driver_account_id Int
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  
+  // Relations
+  driverAccount     DriverBankAccount @relation(fields: [driver_account_id], references: [id])
+}
+
+model PaymentLog {
+  id                Int       @id @default(autoincrement())
+  payment_id        Int
+  status            String
+  message           String?
+  metadata          Json?
+  created_at        DateTime  @default(now())
+  
+  // Relations
+  payment           Payment   @relation(fields: [payment_id], references: [id])
+}

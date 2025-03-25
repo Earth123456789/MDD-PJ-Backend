@@ -1,0 +1,47 @@
+// user-driver-service/prisma/schema.prisma
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  password   String
+  full_name  String
+  phone      String
+  role       UserRole
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+enum UserRole {
+  customer
+  driver
+  admin
+}
+
+model Driver {
+  id              Int          @id @default(autoincrement())
+  user_id         Int          @unique
+  license_number  String
+  id_card_number  String
+  current_location Json?
+  rating          Float        @default(0)
+  status          DriverStatus
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+}
+
+enum DriverStatus {
+  active
+  inactive
+  suspended
+}
+

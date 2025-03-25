@@ -1,0 +1,294 @@
+networks:
+  traefik:
+    driver: bridge
+
+volumes:
+  auth_postgres_data:
+  user_driver_postgres_data:
+  matching_postgres_data:
+  payment_postgres_data:
+  elasticsearch_data:
+  rabbitmq_data:
+  pgadmin_data:
+
+services:
+  # Auth Service (postgres)
+  auth-service:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: always
+    ports:
+      - "5001:5001"
+    depends_on:
+      - auth-postgres
+      - rabbitmq
+      - elasticsearch
+    env_file:
+      - ../services/auth/.env
+    volumes:
+      - ../services/auth:/app
+      - /app/node_modules
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.routers.auth.rule=Host(`auth.localhost`)"
+      - "traefik.http.services.auth.loadbalancer.server.port=5001"
+    networks:
+      - traefik
+
+  # User-Driver Service (Neon DB)
+  user-driver-service:
+    build:
+      context: ../services/user-driver
+      dockerfile: Dockerfile 
+    container_name: user-driver-service
+    restart: always
+    ports:
+      - "3001:3001" 
+    depends_on:
+      - rabbitmq
+      - elasticsearch 
+    env_file:
+      - ../services/user-driver/.env
+    volumes:
+      - ../services/user-driver:/app
+      - /app/node_modules
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.user-driver.entrypoints=web"
+      - "traefik.http.routers.user-driver.rule=Host(`user-driver.localhost`)"
+      - "traefik.http.services.user-driver.loadbalancer.server.port=3001"
+    command: >
+      sh -c "
+        sleep 15 
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
+  
+  # Matching Service (postgres)
+  matching-service:
+    build:
+      context: ../services/matching
+      dockerfile: Dockerfile
+    container_name: matching-service
+    restart: always
+    ports:
+      - "3002:3002" 
+    depends_on:
+      - matching-postgres
+      - rabbitmq
+      - redis
+      - elasticsearch
+    env_file:
+      - ../services/matching/.env
+    volumes:
+      - ../services/matching:/app
+      - /app/node_modules
+    command: >
+      sh -c "
+        npm install winston-elasticsearch &&
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npx nest start --watch
+      "
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.matching.entrypoints=web"
+      - "traefik.http.routers.matching.rule=Host(`matching.localhost`)"
+      - "traefik.http.services.matching.loadbalancer.server.port=3002"
+    networks:
+      - traefik
+  
+  # Payment Service (postgres)
+  payment-service:
+    build:
+      context: ../services/payment
+      dockerfile: Dockerfile
+    container_name: payment-service
+    restart: always
+    ports:
+      - "3003:3003" 
+    depends_on:
+      - payment-postgres
+      - rabbitmq
+      - elasticsearch
+      - redis
+    env_file:
+      - ../services/payment/.env
+    volumes:
+      - ../services/payment:/app
+      - /app/node_modules
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.payment.entrypoints=web"
+      - "traefik.http.routers.payment.rule=Host(`payment.localhost`)"
+      - "traefik.http.services.payment.loadbalancer.server.port=3003"
+    command: >
+      sh -c "
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start:dev
+      "
+
+  # Database Services
+  auth-postgres:
+    image: postgres:latest
+    container_name: auth-postgres
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  # USE NeonDB
+  # user-driver-postgres commented out as noted in the original file
+
+  matching-postgres:
+    image: postgres:latest
+    container_name: matching-postgres
+    restart: always
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vehicle_matching
+    volumes:
+      - matching_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  payment-postgres:
+    image: postgres:latest
+    container_name: payment-postgres
+    restart: always
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payment_service
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  # Infrastructure Services
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis.entrypoints=web"
+      - "traefik.http.routers.redis.rule=Host(`redis.localhost`)"
+      - "traefik.http.services.redis.loadbalancer.server.port=6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.entrypoints=web"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: elasticsearch
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - traefik
+
+  # Admin & Management Tools
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.entrypoints=web"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.localhost`)"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=DEBUG"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
