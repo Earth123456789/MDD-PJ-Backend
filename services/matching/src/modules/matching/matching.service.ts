@@ -1,10 +1,10 @@
 // matching/src/modules/matching/matching.service.ts
 
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { QueueService } from '../../queue/queue.service';
-import { WebsocketGateway } from '../../websocket/websocket.gateway';
-import { UserDriverValidationService } from '../../user-driver-validation.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { QueueService } from 'src/queue/queue.service';
+import { WebsocketGateway } from 'src/websocket/websocket.gateway';
+import { UserDriverValidationService } from 'src/user-driver-validation.service';
 import {
   VehicleStatus,
   OrderStatus,
@@ -13,6 +13,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { MatchingRequestDto } from './dto/matching-request.dto';
+import { transformOrderForWebSocket } from 'src/utils/transformers';
 
 export interface SuccessfulMatch {
   orderId: string;
@@ -95,6 +96,17 @@ export class MatchingService {
         throw new Error(`Order not found: ${orderId}`);
       }
 
+      // Check if order is already in a non-PENDING state
+      if (order.status !== OrderStatus.PENDING) {
+        this.logger.warn(
+          `Order ${orderId} is not in PENDING state (current: ${order.status})`,
+        );
+        throw new HttpException(
+          `Order ${orderId} is already being processed (status: ${order.status})`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       // Validate that the user exists in the user-driver service
       const userExists = await this.userDriverValidation.validateUser(
         order.user_id,
@@ -110,9 +122,22 @@ export class MatchingService {
       }
 
       // Update order status to MATCHING
+      const previousStatus = order.status;
       const updatedOrder = await this.prisma.order.update({
         where: { id: orderIdNumber },
         data: { status: OrderStatus.MATCHING },
+      });
+
+      // Notify about order status change via WebSocket and RabbitMQ
+      this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+      await this.queueService.sendToQueue('order-status-changed', {
+        order_id: updatedOrder.id,
+        previous_status: previousStatus,
+        status: OrderStatus.MATCHING,
+        user_id: updatedOrder.user_id,
+        timestamp: new Date().toISOString(),
+        pickup_location: updatedOrder.pickup_location,
+        dropoff_location: updatedOrder.dropoff_location,
       });
 
       // Find available vehicles
@@ -179,6 +204,7 @@ export class MatchingService {
       }
 
       // Update order with matched vehicle
+      const previousOrderStatus = updatedOrder.status;
       const matchedOrder = await this.prisma.order.update({
         where: { id: order.id },
         data: {
@@ -201,31 +227,60 @@ export class MatchingService {
       );
 
       // Update vehicle status
+      const previousVehicleStatus = VehicleStatus.AVAILABLE;
       await this.updateVehicleStatus(
         bestMatch.vehicleId,
         VehicleStatus.ASSIGNED,
       );
 
-      // Notify via WebSocket
-      this.websocketGateway.notifyVehicleMatched(matchedOrder);
+      // Using the included vehicle directly from matchedOrder
+      // This fixes the issue with null vs undefined
+      this.websocketGateway.notifyOrderStatusChanged(matchedOrder);
+      this.websocketGateway.notifyVehicleMatched(
+        transformOrderForWebSocket(matchedOrder),
+      );
 
       // Get driver info for messaging
-      const vehicle = await this.prisma.vehicle.findUnique({
-        where: { id: bestMatch.vehicleId },
-      });
+      const vehicle = matchedOrder.vehicle;
 
+      // Using optional chaining with nullish coalescing
       const driverInfo: any = vehicle?.driver_id
         ? await this.userDriverValidation.getDriverInfo(vehicle.driver_id)
         : null;
 
-      // Send message to queue
+      // Send order-matched message to queue
       await this.queueService.sendToQueue('order-matched', {
-        orderId: order.id,
-        vehicleId: bestMatch.vehicleId,
-        driverId: vehicle?.driver_id || null,
-        driverName: driverInfo?.user?.full_name || null,
+        order_id: order.id,
+        vehicle_id: bestMatch.vehicleId,
+        driver_id: vehicle?.driver_id || null,
+        driver_name: driverInfo?.user?.full_name || null,
         algorithm: 'knapsack',
         score: bestMatch.totalScore,
+        timestamp: new Date().toISOString(),
+        pickup_location: matchedOrder.pickup_location,
+        dropoff_location: matchedOrder.dropoff_location,
+      });
+
+      // Send order-status-changed message to queue
+      await this.queueService.sendToQueue('order-status-changed', {
+        order_id: matchedOrder.id,
+        previous_status: previousOrderStatus,
+        status: OrderStatus.MATCHED,
+        user_id: matchedOrder.user_id,
+        vehicle_id: bestMatch.vehicleId,
+        driver_id: vehicle?.driver_id || null,
+        timestamp: new Date().toISOString(),
+        pickup_location: matchedOrder.pickup_location,
+        dropoff_location: matchedOrder.dropoff_location,
+      });
+
+      // Send vehicle-status-changed message to queue
+      await this.queueService.sendToQueue('vehicle-status-changed', {
+        vehicle_id: bestMatch.vehicleId,
+        driver_id: vehicle?.driver_id || null,
+        previous_status: previousVehicleStatus,
+        status: VehicleStatus.ASSIGNED,
+        order_id: matchedOrder.id,
         timestamp: new Date().toISOString(),
       });
 
@@ -239,6 +294,366 @@ export class MatchingService {
         `Error in matching process for order ${orderId}: ${error.message}`,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Start delivery - transition from MATCHED to IN_TRANSIT
+   * @param orderId - The ID of the order to start delivery for
+   */
+  async startDelivery(orderId: string): Promise<Order | null> {
+    try {
+      const orderIdNumber = parseInt(orderId, 10);
+
+      if (isNaN(orderIdNumber)) {
+        throw new Error(`Invalid order ID: ${orderId}`);
+      }
+
+      // Validate the order exists and is in MATCHED state
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderIdNumber },
+        include: { vehicle: true },
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found`);
+        return null;
+      }
+
+      if (order.status !== OrderStatus.MATCHED) {
+        this.logger.warn(
+          `Order ${orderId} is not in MATCHED state (current: ${order.status})`,
+        );
+        throw new HttpException(
+          `Order ${orderId} is not ready for delivery (status: ${order.status})`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!order.vehicle_matched) {
+        this.logger.warn(`Order ${orderId} has no matched vehicle`);
+        throw new HttpException(
+          `Order ${orderId} has no matched vehicle`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Update order status to IN_TRANSIT
+      const previousOrderStatus = order.status;
+      const updatedOrder = await this.prisma.order.update({
+        where: { id: orderIdNumber },
+        data: { status: OrderStatus.IN_TRANSIT },
+        include: { vehicle: true },
+      });
+
+      // Update vehicle status to IN_TRANSIT
+      const previousVehicleStatus = VehicleStatus.ASSIGNED;
+      await this.prisma.vehicle.update({
+        where: { id: order.vehicle_matched },
+        data: { status: VehicleStatus.IN_TRANSIT },
+      });
+
+      // Notify via WebSocket
+      this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+
+      // Get the vehicle for the message
+      const vehicle = order.vehicle;
+
+      // Send order-status-changed message to queue
+      await this.queueService.sendToQueue('order-status-changed', {
+        order_id: updatedOrder.id,
+        previous_status: previousOrderStatus,
+        status: OrderStatus.IN_TRANSIT,
+        user_id: updatedOrder.user_id,
+        vehicle_id: order.vehicle_matched,
+        driver_id: vehicle?.driver_id || null,
+        timestamp: new Date().toISOString(),
+        pickup_location: updatedOrder.pickup_location,
+        dropoff_location: updatedOrder.dropoff_location,
+        distance_total: this.calculateDistance(
+          updatedOrder.pickup_location,
+          updatedOrder.dropoff_location,
+        ),
+        estimated_arrival_time: this.estimateArrivalTime(
+          updatedOrder.pickup_location,
+          updatedOrder.dropoff_location,
+        ),
+      });
+
+      // Send vehicle-status-changed message to queue
+      await this.queueService.sendToQueue('vehicle-status-changed', {
+        vehicle_id: order.vehicle_matched,
+        driver_id: vehicle?.driver_id || null,
+        previous_status: previousVehicleStatus,
+        status: VehicleStatus.IN_TRANSIT,
+        order_id: updatedOrder.id,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `Order ${orderIdNumber} delivery started (status changed to IN_TRANSIT)`,
+      );
+
+      return updatedOrder;
+    } catch (error) {
+      this.logger.error(
+        `Error starting delivery for order ${orderId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Complete delivery - transition from IN_TRANSIT to DELIVERED
+   * @param orderId - The ID of the order to complete
+   */
+  async completeDelivery(orderId: string): Promise<Order | null> {
+    try {
+      const orderIdNumber = parseInt(orderId, 10);
+
+      if (isNaN(orderIdNumber)) {
+        throw new Error(`Invalid order ID: ${orderId}`);
+      }
+
+      // Validate the order exists and is in IN_TRANSIT state
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderIdNumber },
+        include: { vehicle: true },
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found`);
+        return null;
+      }
+
+      if (order.status !== OrderStatus.IN_TRANSIT) {
+        this.logger.warn(
+          `Order ${orderId} is not in IN_TRANSIT state (current: ${order.status})`,
+        );
+        throw new HttpException(
+          `Order ${orderId} is not in delivery (status: ${order.status})`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!order.vehicle_matched) {
+        this.logger.warn(`Order ${orderId} has no matched vehicle`);
+        throw new HttpException(
+          `Order ${orderId} has no matched vehicle`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Update order status to DELIVERED
+      const previousOrderStatus = order.status;
+      const updatedOrder = await this.prisma.order.update({
+        where: { id: orderIdNumber },
+        data: { status: OrderStatus.DELIVERED },
+        include: { vehicle: true },
+      });
+
+      // Update vehicle status to AVAILABLE
+      const previousVehicleStatus = VehicleStatus.IN_TRANSIT;
+      await this.prisma.vehicle.update({
+        where: { id: order.vehicle_matched },
+        data: { status: VehicleStatus.AVAILABLE },
+      });
+
+      // Notify via WebSocket
+      this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+
+      // Get the vehicle for the message
+      const vehicle = order.vehicle;
+
+      // Send order-status-changed message to queue
+      await this.queueService.sendToQueue('order-status-changed', {
+        order_id: updatedOrder.id,
+        previous_status: previousOrderStatus,
+        status: OrderStatus.DELIVERED,
+        user_id: updatedOrder.user_id,
+        vehicle_id: order.vehicle_matched,
+        driver_id: vehicle?.driver_id || null,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Send vehicle-status-changed message to queue
+      await this.queueService.sendToQueue('vehicle-status-changed', {
+        vehicle_id: order.vehicle_matched,
+        driver_id: vehicle?.driver_id || null,
+        previous_status: previousVehicleStatus,
+        status: VehicleStatus.AVAILABLE,
+        order_id: updatedOrder.id,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `Order ${orderIdNumber} delivery completed (status changed to DELIVERED)`,
+      );
+
+      return updatedOrder;
+    } catch (error) {
+      this.logger.error(
+        `Error completing delivery for order ${orderId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel an order (from any state)
+   * @param orderId - The ID of the order to cancel
+   */
+  async cancelOrder(orderId: string): Promise<Order | null> {
+    try {
+      const orderIdNumber = parseInt(orderId, 10);
+
+      if (isNaN(orderIdNumber)) {
+        throw new Error(`Invalid order ID: ${orderId}`);
+      }
+
+      // Find the order
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderIdNumber },
+        include: { vehicle: true },
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found`);
+        return null;
+      }
+
+      // Check if the order is already cancelled or delivered
+      if (
+        order.status === OrderStatus.CANCELLED ||
+        order.status === OrderStatus.DELIVERED
+      ) {
+        this.logger.warn(
+          `Order ${orderId} is already in final state: ${order.status}`,
+        );
+        throw new HttpException(
+          `Order ${orderId} cannot be cancelled (status: ${order.status})`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const previousOrderStatus = order.status;
+      const vehicleId = order.vehicle_matched;
+      let previousVehicleStatus: VehicleStatus | undefined = undefined;
+      let vehicle: Vehicle | undefined = undefined;
+
+      // If a vehicle is assigned, get its details and status
+      if (vehicleId) {
+        vehicle = order.vehicle || undefined;
+        if (vehicle) {
+          previousVehicleStatus = vehicle.status;
+        }
+      }
+
+      // Update order status to CANCELLED
+      const updatedOrder = await this.prisma.order.update({
+        where: { id: orderIdNumber },
+        data: { status: OrderStatus.CANCELLED },
+        include: { vehicle: true },
+      });
+
+      // If a vehicle was assigned, update its status to AVAILABLE
+      if (vehicleId && previousVehicleStatus) {
+        await this.prisma.vehicle.update({
+          where: { id: vehicleId },
+          data: { status: VehicleStatus.AVAILABLE },
+        });
+      }
+
+      // Notify via WebSocket
+      this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+
+      // Send order-status-changed message to queue
+      await this.queueService.sendToQueue('order-status-changed', {
+        order_id: updatedOrder.id,
+        previous_status: previousOrderStatus,
+        status: OrderStatus.CANCELLED,
+        user_id: updatedOrder.user_id,
+        vehicle_id: vehicleId,
+        driver_id: vehicle?.driver_id || null,
+        timestamp: new Date().toISOString(),
+      });
+
+      // If a vehicle was assigned, send vehicle-status-changed message
+      if (vehicleId && previousVehicleStatus && vehicle) {
+        await this.queueService.sendToQueue('vehicle-status-changed', {
+          vehicle_id: vehicleId,
+          driver_id: vehicle.driver_id || null,
+          previous_status: previousVehicleStatus,
+          status: VehicleStatus.AVAILABLE,
+          order_id: updatedOrder.id,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      this.logger.log(`Order ${orderIdNumber} cancelled`);
+
+      return updatedOrder;
+    } catch (error) {
+      this.logger.error(`Error cancelling order ${orderId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate distance between pickup and dropoff points
+   * @param pickup - Pickup location coordinates
+   * @param dropoff - Dropoff location coordinates
+   * @returns Distance in kilometers
+   */
+  private calculateDistance(pickup: any, dropoff: any): number {
+    // Simple Euclidean distance calculation (simplified for example)
+    // In a real application, you'd use a more sophisticated algorithm
+    // or a mapping service API to calculate actual route distance
+    try {
+      const R = 6371; // Earth radius in km
+      const dLat = this.deg2rad(dropoff.latitude - pickup.latitude);
+      const dLon = this.deg2rad(dropoff.longitude - pickup.longitude);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(this.deg2rad(pickup.latitude)) *
+          Math.cos(this.deg2rad(dropoff.latitude)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+      return parseFloat(distance.toFixed(2));
+    } catch (error) {
+      this.logger.warn(`Error calculating distance: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Convert degrees to radians
+   */
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
+
+  /**
+   * Estimate arrival time based on distance
+   * @param pickup - Pickup location coordinates
+   * @param dropoff - Dropoff location coordinates
+   * @returns Estimated arrival time
+   */
+  private estimateArrivalTime(pickup: any, dropoff: any): string {
+    try {
+      const distance = this.calculateDistance(pickup, dropoff);
+      // Assuming average speed of 30 km/h
+      const timeHours = distance / 30;
+      const now = new Date();
+      const arrivalTime = new Date(now.getTime() + timeHours * 60 * 60 * 1000);
+      return arrivalTime.toISOString();
+    } catch (error) {
+      this.logger.warn(`Error estimating arrival time: ${error.message}`);
+      // Default to 1 hour from now
+      const oneHourLater = new Date(Date.now() + 60 * 60 * 1000);
+      return oneHourLater.toISOString();
     }
   }
 
@@ -341,16 +756,20 @@ export class MatchingService {
     matchingScore: MatchingScore,
   ): Promise<void> {
     try {
-      // Mock implementation - in a real system, you would save this to a database
-      this.logger.log(
-        `[MOCK] Saving matching score for order ${orderId} and vehicle ${matchingScore.vehicleId}`,
-      );
-      this.logger.log(
-        `[MOCK] Score details: weight=${matchingScore.weightScore}, volume=${matchingScore.volumeScore}, dimension=${matchingScore.dimensionScore}, total=${matchingScore.totalScore}`,
-      );
+      await this.prisma.matchingScore.create({
+        data: {
+          order_id: orderId,
+          vehicle_id: matchingScore.vehicleId,
+          weight_score: matchingScore.weightScore,
+          volume_score: matchingScore.volumeScore,
+          dimension_score: matchingScore.dimensionScore,
+          total_score: matchingScore.totalScore,
+        },
+      });
 
-      // In a real implementation, you would use prisma to save the data
-      // await this.prisma.matchingScore.create({...})
+      this.logger.log(
+        `Saved matching score for order ${orderId} and vehicle ${matchingScore.vehicleId}`,
+      );
     } catch (error) {
       this.logger.error(`Error saving matching score: ${error.message}`);
       // Don't throw, just log the error as this is non-critical
@@ -366,16 +785,19 @@ export class MatchingService {
     score: number,
   ): Promise<void> {
     try {
-      // Mock implementation - in a real system, you would save this to a database
-      this.logger.log(
-        `[MOCK] Creating matching attempt record for order ${orderId} and vehicle ${vehicleId}`,
-      );
-      this.logger.log(
-        `[MOCK] Attempt details: algorithm=knapsack, score=${score}, status=MATCHED`,
-      );
+      await this.prisma.matchingAttempt.create({
+        data: {
+          order_id: orderId,
+          vehicle_id: vehicleId,
+          algorithm_used: 'knapsack',
+          score: score,
+          status: 'MATCHED',
+        },
+      });
 
-      // In a real implementation, you would use prisma to save the data
-      // await this.prisma.matchingAttempt.create({...})
+      this.logger.log(
+        `Created matching attempt record for order ${orderId} and vehicle ${vehicleId}`,
+      );
     } catch (error) {
       this.logger.error(`Error creating matching attempt: ${error.message}`);
       // Don't throw, just log the error as this is non-critical
@@ -513,17 +935,34 @@ export class MatchingService {
         return results;
       }
 
-      // Update all orders to MATCHING status
-      await this.prisma.order.updateMany({
-        where: {
-          id: {
-            in: orders.map((order) => order.id),
+      // Update all orders to MATCHING status and send events
+      for (const order of orders) {
+        const previousStatus = order.status;
+        await this.prisma.order.update({
+          where: {
+            id: order.id,
           },
-        },
-        data: {
+          data: {
+            status: OrderStatus.MATCHING,
+          },
+        });
+
+        // Notify about order status change via WebSocket and RabbitMQ
+        this.websocketGateway.notifyOrderStatusChanged({
+          ...order,
           status: OrderStatus.MATCHING,
-        },
-      });
+        });
+
+        await this.queueService.sendToQueue('order-status-changed', {
+          order_id: order.id,
+          previous_status: previousStatus,
+          status: OrderStatus.MATCHING,
+          user_id: order.user_id,
+          timestamp: new Date().toISOString(),
+          pickup_location: order.pickup_location,
+          dropoff_location: order.dropoff_location,
+        });
+      }
 
       // Solve the multi-knapsack problem
       const assignments = this.solveMultiKnapsack(orders, validatedVehicles);
@@ -539,22 +978,32 @@ export class MatchingService {
           assignedVehicleIds.add(vehicleId);
 
           // Update order with matched vehicle
-          await this.prisma.order.update({
+          const previousStatus = OrderStatus.MATCHING;
+          const updatedOrder = await this.prisma.order.update({
             where: { id: order.id },
             data: {
               vehicle_matched: vehicleId,
               status: OrderStatus.MATCHED,
             },
+            include: { vehicle: true },
           });
 
           // Create matching attempt record
           await this.createMatchingAttempt(order.id, vehicleId, score);
 
-          // Get driver info for messaging
-          const vehicle = await this.prisma.vehicle.findUnique({
-            where: { id: vehicleId },
+          // Save matching score for analytics
+          await this.saveMatchingScore(order.id, {
+            vehicleId,
+            weightScore: score * 0.35, // Simplified for batch processing
+            volumeScore: score * 0.35,
+            dimensionScore: score * 0.3,
+            totalScore: score,
           });
 
+          // Get vehicle information directly from the updated order
+          const vehicle = updatedOrder.vehicle;
+
+          // Get driver info if vehicle exists and has a driver
           const driverInfo: any = vehicle?.driver_id
             ? await this.userDriverValidation.getDriverInfo(vehicle.driver_id)
             : null;
@@ -567,15 +1016,36 @@ export class MatchingService {
             algorithm: 'multi-knapsack',
           });
 
-          // Send to queue
+          // Notify via WebSocket
+          this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+          this.websocketGateway.notifyVehicleMatched(
+            transformOrderForWebSocket(updatedOrder),
+          );
+
+          // Send order-matched message to queue
           await this.queueService.sendToQueue('order-matched', {
-            orderId: order.id,
-            vehicleId,
-            driverId: vehicle?.driver_id || null,
-            driverName: driverInfo?.user?.full_name || null,
+            order_id: order.id,
+            vehicle_id: vehicleId,
+            driver_id: vehicle?.driver_id || null,
+            driver_name: driverInfo?.user?.full_name || null,
             algorithm: 'multi-knapsack',
             score,
             timestamp: new Date().toISOString(),
+            pickup_location: order.pickup_location,
+            dropoff_location: order.dropoff_location,
+          });
+
+          // Send order-status-changed message to queue
+          await this.queueService.sendToQueue('order-status-changed', {
+            order_id: order.id,
+            previous_status: previousStatus,
+            status: OrderStatus.MATCHED,
+            user_id: order.user_id,
+            vehicle_id: vehicleId,
+            driver_id: vehicle?.driver_id || null,
+            timestamp: new Date().toISOString(),
+            pickup_location: order.pickup_location,
+            dropoff_location: order.dropoff_location,
           });
         } else {
           // No matching vehicle found
@@ -591,11 +1061,20 @@ export class MatchingService {
         }
       }
 
-      // Update statuses of matched vehicles
-      if (assignedVehicleIds.size > 0) {
-        await this.prisma.vehicle.updateMany({
-          where: { id: { in: Array.from(assignedVehicleIds) } },
+      // Update statuses of matched vehicles and send events
+      for (const vehicleId of assignedVehicleIds) {
+        const vehicle = await this.prisma.vehicle.update({
+          where: { id: vehicleId },
           data: { status: VehicleStatus.ASSIGNED },
+        });
+
+        // Send vehicle-status-changed message to queue
+        await this.queueService.sendToQueue('vehicle-status-changed', {
+          vehicle_id: vehicleId,
+          driver_id: vehicle?.driver_id || null,
+          previous_status: VehicleStatus.AVAILABLE,
+          status: VehicleStatus.ASSIGNED,
+          timestamp: new Date().toISOString(),
         });
       }
 
@@ -700,5 +1179,66 @@ export class MatchingService {
     return assignments;
   }
 
-  // Rest of the service methods remain the same...
+  /**
+   * Get an order by ID
+   * @param orderId - The ID of the order to retrieve
+   */
+  async getOrderById(orderId: string): Promise<Order | null> {
+    try {
+      const orderIdNumber = parseInt(orderId, 10);
+
+      if (isNaN(orderIdNumber)) {
+        throw new Error(`Invalid order ID: ${orderId}`);
+      }
+
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderIdNumber },
+        include: { vehicle: true },
+      });
+
+      return order;
+    } catch (error) {
+      this.logger.error(`Error getting order ${orderId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all orders with optional filters
+   * @param status - Optional status filter
+   * @param vehicleId - Optional vehicle ID filter
+   * @param userId - Optional user ID filter
+   */
+  async getAllOrders(
+    status?: OrderStatus,
+    vehicleId?: number,
+    userId?: number,
+  ): Promise<Order[]> {
+    try {
+      const where: Prisma.OrderWhereInput = {};
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (vehicleId) {
+        where.vehicle_matched = vehicleId;
+      }
+
+      if (userId) {
+        where.user_id = userId;
+      }
+
+      const orders = await this.prisma.order.findMany({
+        where,
+        include: { vehicle: true },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return orders;
+    } catch (error) {
+      this.logger.error(`Error getting orders: ${error.message}`);
+      throw error;
+    }
+  }
 }

@@ -1,9 +1,12 @@
+// matching/src/modules/matching/matching.controller.ts
+
 import {
   Controller,
+  Get,
   Post,
   Body,
   Param,
-  Get,
+  Query,
   HttpStatus,
   HttpException,
   Logger,
@@ -15,13 +18,12 @@ import {
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiQuery,
   ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/guards/jwt-auth.guard'; // ✅ แก้ path ให้ถูกกับโครงสร้างจริง
+import { OrderStatus } from '@prisma/client';
 
-@UseGuards(JwtAuthGuard)
 @ApiTags('matching')
 @Controller('matching')
 @ApiBearerAuth('JWT-auth')
@@ -78,6 +80,153 @@ export class MatchingController {
     }
   }
 
+  @Post('order/:orderId/start')
+  @ApiOperation({
+    summary: 'Start delivery for an order (change to IN_TRANSIT)',
+  })
+  @ApiParam({
+    name: 'orderId',
+    description: 'The ID of the order to start delivery for',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order delivery started successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found or no suitable vehicle available',
+  })
+  async startDelivery(@Param('orderId') orderId: string) {
+    try {
+      const updatedOrder = await this.matchingService.startDelivery(orderId);
+
+      if (!updatedOrder) {
+        throw new HttpException(
+          'Order not found or not in correct status',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return {
+        success: true,
+        data: {
+          orderId: updatedOrder.id,
+          vehicleId: updatedOrder.vehicle_matched,
+          status: updatedOrder.status,
+        },
+        message: 'Order delivery started successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error starting delivery for order ${orderId}: ${error.message}`,
+      );
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'An error occurred during the delivery start process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('order/:orderId/complete')
+  @ApiOperation({
+    summary: 'Complete delivery for an order (change to DELIVERED)',
+  })
+  @ApiParam({
+    name: 'orderId',
+    description: 'The ID of the order to complete delivery for',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order delivery completed successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found or not in correct status',
+  })
+  async completeDelivery(@Param('orderId') orderId: string) {
+    try {
+      const updatedOrder = await this.matchingService.completeDelivery(orderId);
+
+      if (!updatedOrder) {
+        throw new HttpException(
+          'Order not found or not in correct status',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return {
+        success: true,
+        data: {
+          orderId: updatedOrder.id,
+          vehicleId: updatedOrder.vehicle_matched,
+          status: updatedOrder.status,
+        },
+        message: 'Order delivery completed successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error completing delivery for order ${orderId}: ${error.message}`,
+      );
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'An error occurred during the delivery completion process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('order/:orderId/cancel')
+  @ApiOperation({
+    summary: 'Cancel an order',
+  })
+  @ApiParam({ name: 'orderId', description: 'The ID of the order to cancel' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order cancelled successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+  })
+  async cancelOrder(@Param('orderId') orderId: string) {
+    try {
+      const updatedOrder = await this.matchingService.cancelOrder(orderId);
+
+      if (!updatedOrder) {
+        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        success: true,
+        data: {
+          orderId: updatedOrder.id,
+          status: updatedOrder.status,
+        },
+        message: 'Order cancelled successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error cancelling order ${orderId}: ${error.message}`);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'An error occurred during the order cancellation process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post('batch')
   @ApiOperation({ summary: 'Process batch matching for multiple orders' })
   @ApiBody({ type: MatchingRequestDto })
@@ -99,6 +248,80 @@ export class MatchingController {
 
       throw new HttpException(
         'An error occurred during the batch matching process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('order/:orderId')
+  @ApiOperation({ summary: 'Get order details' })
+  @ApiParam({ name: 'orderId', description: 'The ID of the order to retrieve' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Order not found',
+  })
+  async getOrder(@Param('orderId') orderId: string) {
+    try {
+      const order = await this.matchingService.getOrderById(orderId);
+
+      if (!order) {
+        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        success: true,
+        data: order,
+        message: 'Order details retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error retrieving order ${orderId}: ${error.message}`);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'An error occurred while retrieving order details',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('orders')
+  @ApiOperation({ summary: 'Get all orders with optional filters' })
+  @ApiQuery({ name: 'status', enum: OrderStatus, required: false })
+  @ApiQuery({ name: 'vehicleId', required: false })
+  @ApiQuery({ name: 'userId', required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Orders retrieved successfully',
+  })
+  async getOrders(
+    @Query('status') status?: OrderStatus,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('userId') userId?: string,
+  ) {
+    try {
+      const orders = await this.matchingService.getAllOrders(
+        status,
+        vehicleId ? parseInt(vehicleId, 10) : undefined,
+        userId ? parseInt(userId, 10) : undefined,
+      );
+
+      return {
+        success: true,
+        data: orders,
+        message: 'Orders retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error retrieving orders: ${error.message}`);
+
+      throw new HttpException(
+        'An error occurred while retrieving orders',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
