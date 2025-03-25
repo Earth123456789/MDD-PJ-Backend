@@ -1,3 +1,6 @@
+version: "3.8"
+name: shopdee-backend
+
 networks:
   traefik:
     driver: bridge
@@ -7,7 +10,6 @@ volumes:
   user_driver_postgres_data:
   matching_postgres_data:
   payment_postgres_data:
-  elasticsearch_data:
   rabbitmq_data:
   pgadmin_data:
 
@@ -24,18 +26,11 @@ services:
     depends_on:
       - auth-postgres
       - rabbitmq
-      - elasticsearch
     env_file:
       - ../services/auth/.env
     volumes:
       - ../services/auth:/app
       - /app/node_modules
-    command: >
-      sh -c "
-        npx prisma generate &&
-        npx prisma migrate deploy &&
-        npm run start
-      "
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
@@ -44,6 +39,13 @@ services:
       - "traefik.http.services.auth.loadbalancer.server.port=5001"
     networks:
       - traefik
+    command: >
+      sh -c "
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start
+      "
 
   # User-Driver Service (Neon DB)
   user-driver-service:
@@ -56,7 +58,6 @@ services:
       - "3001:3001" 
     depends_on:
       - rabbitmq
-      - elasticsearch 
     env_file:
       - ../services/user-driver/.env
     volumes:
@@ -72,7 +73,7 @@ services:
       - "traefik.http.services.user-driver.loadbalancer.server.port=3001"
     command: >
       sh -c "
-        sleep 15 
+        sleep 15 &&
         npx prisma generate &&
         npx prisma migrate deploy &&
         npm run start
@@ -91,7 +92,6 @@ services:
       - matching-postgres
       - rabbitmq
       - redis
-      - elasticsearch
     env_file:
       - ../services/matching/.env
     volumes:
@@ -126,7 +126,6 @@ services:
     depends_on:
       - payment-postgres
       - rabbitmq
-      - elasticsearch
       - redis
     env_file:
       - ../services/payment/.env
@@ -149,6 +148,33 @@ services:
         npm run start:dev
       "
 
+  # Tracking Service (MongoDB Atlas)
+  tracking-service:
+    build:
+      context: ./tracking-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: tracking-service
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    env_file:
+      - ./tracking-service/.env
+    volumes:
+      - ./tracking-service:/app
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.tracking.entrypoints=web"
+      - "traefik.http.routers.tracking.rule=Host(`tracking.localhost`)"
+      - "traefik.http.services.tracking.loadbalancer.server.port=8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
   # Database Services
   auth-postgres:
     image: postgres:latest
@@ -157,17 +183,13 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: auth_pass
-      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_service
     volumes:
       - auth_postgres_data:/var/lib/postgresql/data
     networks:
       - traefik
-
-  # USE NeonDB
-  # user-driver-postgres commented out as noted in the original file
-
   matching-postgres:
     image: postgres:latest
     container_name: matching-postgres
@@ -237,21 +259,6 @@ services:
       - "traefik.http.routers.rabbitmq.entrypoints=web"
       - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)"
       - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
-    container_name: elasticsearch
-    restart: always
-    ports:
-      - "9200:9200"
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    networks:
-      - traefik
 
   # Admin & Management Tools
   pgadmin:

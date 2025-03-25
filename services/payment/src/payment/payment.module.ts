@@ -1,14 +1,21 @@
+// payment/src/payment/payment.module.ts
+
 import { Module } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { VehicleTypeController } from './vehicle-type.controller';
 import { QrCodeModule } from '../qrcode/qrcode.module';
 import { ClientsModule, Transport, ClientOptions } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PricingModule } from '../pricing/pricing.module';
+import { HttpModule } from '@nestjs/axios';
 // import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     QrCodeModule,
+    PricingModule,
+    HttpModule,
     // AuthModule,
     ClientsModule.registerAsync([
       {
@@ -33,7 +40,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       },
     ]),
   ],
-  controllers: [PaymentController],
+  controllers: [PaymentController, VehicleTypeController],
   providers: [PaymentService],
   exports: [PaymentService],
 })

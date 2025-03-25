@@ -14,10 +14,11 @@ export class CreatePaymentDto {
   @ApiProperty({
     description: 'The payment amount in Thai Baht (THB)',
     example: 3500.0,
+    required: false,
   })
   @IsNumber()
-  @IsNotEmpty()
-  amount: number;
+  @IsOptional()
+  amount?: number;
 
   @ApiPropertyOptional({
     description: 'The payment method',

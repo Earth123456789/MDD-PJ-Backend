@@ -1,74 +1,75 @@
-# Node.js
-node_modules/
+# Node.js dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Logs
 *.log
-npm-debug.log*
+logs
+debug.log
 
 # Environment variables
 .env
-
-# Docker-related files
-.dockerignore
-Dockerfile
-
-# IDE files
-.vscode/
-.idea/
-
-# Operating system files
-.DS_Store
-Thumbs.db
-
-# Temporary files
-tmp/
-
-# Exclude virtual environments
-env/
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Ignore environment variables
-.env
-
-# Ignore logs
-*.log
-debug.log
-
-# Ignore IDE settings
-.vscode/
-.idea/
-
-# Ignore OS-generated files
-.DS_Store
-Thumbs.db
-
-# Ignore temp files
-tmp/
-
-See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# misc
-.DS_Store
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# IDE-specific files
+.vscode/
+.idea/
+*.iml
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Docker-related files
+.dockerignore
+Dockerfile
+
+# Build artifacts
+/build
+/dist
+/coverage
+
+# Temporary files
+tmp/
+*.swp
+
+# Virtual Environment
+venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log

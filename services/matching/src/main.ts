@@ -56,7 +56,15 @@ async function bootstrap() {
     .addTag('matching')
     .addTag('WebSockets')
     .addTag('WebSocket Documentation')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

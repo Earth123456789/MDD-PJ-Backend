@@ -1,4 +1,4 @@
-// payment-service/prisma/schema.prisma
+// payment/prisma/schema.prisma
 
 generator client {
   provider      = "prisma-client-js"

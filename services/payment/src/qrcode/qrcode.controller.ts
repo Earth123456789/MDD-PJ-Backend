@@ -48,13 +48,13 @@ export class QrCodeController {
   ) {
     const driverIdNum = parseInt(driverId);
     const amountNum = parseFloat(amount);
-    
+
     const qrCodeData = await this.qrCodeService.generatePaymentQrCode(
       999, // Test payment ID
       amountNum,
       driverIdNum,
     );
-    
+
     return { qrCodeData };
   }
 }

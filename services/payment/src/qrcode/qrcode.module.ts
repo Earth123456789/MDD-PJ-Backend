@@ -15,7 +15,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           return {
             transport: Transport.RMQ,
             options: {
-              urls: [configService.get<string>('rabbitmq.url') || 'amqp://localhost:5672'],
+              urls: [
+                configService.get<string>('rabbitmq.url') ||
+                  'amqp://localhost:5672',
+              ],
               queue: `${configService.get<string>('rabbitmq.queuePrefix') || 'payment_service'}_events`,
               queueOptions: {
                 durable: true,
