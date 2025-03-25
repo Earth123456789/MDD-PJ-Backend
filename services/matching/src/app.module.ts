@@ -1,3 +1,6 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -9,15 +12,11 @@ import { MatchingModule } from './modules/matching/matching.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
 
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AuthMiddleware } from './guards/auth.middleware';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
-    // Core configuration module
     ConfigModule,
-
-    // Event emitter for application events
     EventEmitterModule.forRoot({
       wildcard: true,
       delimiter: '.',
@@ -27,11 +26,7 @@ import { AuthMiddleware } from './guards/auth.middleware';
       verboseMemoryLeak: true,
       ignoreErrors: false,
     }),
-
-    // Scheduled tasks
     ScheduleModule.forRoot(),
-
-    // Application modules
     PrismaModule,
     VehicleModule,
     OrderModule,
@@ -40,10 +35,11 @@ import { AuthMiddleware } from './guards/auth.middleware';
     QueueModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AuthMiddleware).forRoutes('order', 'vehicle', 'matching'); // 🔒 Protect ทุก route ที่ขึ้นต้นด้วย /order
-  }
-}
+export class AppModule {}
