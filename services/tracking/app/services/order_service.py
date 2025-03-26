@@ -2,6 +2,8 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from geopy.distance import geodesic
+import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
 from app.db.models import (
@@ -20,6 +22,42 @@ class OrderService:
     Service for handling order tracking data.
     """
     
+    async def validate_order_exists(self, order_id: int) -> bool:
+        """Check if order exists in matching service."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{settings.MATCHING_SERVICE_URL}/matching/order/{order_id}",
+                    headers={"Authorization": f"Bearer {settings.SERVICE_API_KEY}"},
+                    timeout=5.0
+                )
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Error validating order {order_id}: {e}")
+            # Always log warnings but return True in development mode
+            if settings.APP_ENV == "development":
+                logger.warning(f"Bypassing order validation in development mode")
+                return True
+            return False
+
+    async def validate_user_exists(self, user_id: int) -> bool:
+        """Check if user exists in user-driver service."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{settings.USER_DRIVER_SERVICE_URL}/api/users/{user_id}",
+                    headers={"Authorization": f"Bearer {settings.SERVICE_API_KEY}"},
+                    timeout=5.0
+                )
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Error validating user {user_id}: {e}")
+            # Always log warnings but return True in development mode
+            if settings.APP_ENV == "development":
+                logger.warning(f"Bypassing user validation in development mode")
+                return True
+            return False
+    
     async def create_order_tracking(
         self,
         order_id: int,
@@ -30,21 +68,21 @@ class OrderService:
         vehicle_id: Optional[int] = None,
         status: OrderStatus = OrderStatus.PENDING
     ) -> OrderTracking:
-        """
-        Create tracking for a new order.
-        
-        Args:
-            order_id: The ID of the order
-            user_id: The ID of the user who placed the order
-            pickup_location: The pickup location
-            dropoff_location: The dropoff location
-            driver_id: Optional ID of the assigned driver
-            vehicle_id: Optional ID of the assigned vehicle
-            status: The initial status of the order
+        """Create tracking for a new order."""
+        # Validate user and order if not in development mode
+        if settings.APP_ENV != "development":
+            # Check if user exists
+            user_exists = await self.validate_user_exists(user_id)
+            if not user_exists:
+                logger.error(f"User {user_id} not found in user-driver service")
+                raise ValueError(f"User {user_id} not found")
             
-        Returns:
-            The created order tracking
-        """
+            # Check if order exists
+            order_exists = await self.validate_order_exists(order_id)
+            if not order_exists:
+                logger.error(f"Order {order_id} not found in matching service")
+                raise ValueError(f"Order {order_id} not found")
+            
         # Save the geo points
         saved_pickup = await pickup_location.save()
         saved_dropoff = await dropoff_location.save()

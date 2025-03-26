@@ -151,7 +151,7 @@ services:
   # Tracking Service (MongoDB Atlas)
   tracking-service:
     build:
-      context: ./tracking-service
+      context: ../services/tracking
       dockerfile: Dockerfile
       target: development
     container_name: tracking-service
@@ -162,9 +162,9 @@ services:
       - rabbitmq
       - redis
     env_file:
-      - ./tracking-service/.env
+      - ../services/tracking/.env
     volumes:
-      - ./tracking-service:/app
+      - ../services/tracking:/app
     networks:
       - traefik
     labels:
@@ -173,7 +173,13 @@ services:
       - "traefik.http.routers.tracking.entrypoints=web"
       - "traefik.http.routers.tracking.rule=Host(`tracking.localhost`)"
       - "traefik.http.services.tracking.loadbalancer.server.port=8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >      
+      sh -c "
+          sleep 15 &&
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+        "
+
+  
 
   # Database Services
   auth-postgres:

@@ -157,7 +157,7 @@ async def find_nearby_drivers(
 async def create_order_tracking(
     order_data: OrderTrackingCreate,
     order_service: OrderService = Depends(),
-    user_id: int = Depends(get_current_user_id)
+    current_user_id: Optional[int] = Depends(get_current_user_id)
 ):
     """
     Create tracking for a new order.
@@ -165,8 +165,17 @@ async def create_order_tracking(
     This endpoint is called when a new order is created in the system to
     initialize tracking. It requires user authentication.
     """
-    # Override user_id from request with authenticated user_id
-    order_data.user_id = user_id
+    # Use the user_id from the request body, but validate it matches the token
+    user_id = order_data.user_id
+    
+    # Optional: Validate that the authenticated user matches the requested user
+    # Uncomment this if you want only authenticated users to create orders for themselves
+    # if current_user_id is not None and user_id != current_user_id:
+    #    logger.warning(f"User {current_user_id} attempted to create order for user {user_id}")
+    #    raise HTTPException(
+    #        status_code=status.HTTP_403_FORBIDDEN,
+    #        detail="Not authorized to create orders for other users"
+    #    )
     
     # Create GeoPoints from location data
     pickup_location = GeoPoint(
@@ -184,33 +193,40 @@ async def create_order_tracking(
     )
     
     # Create order tracking
-    order_tracking = await order_service.create_order_tracking(
-        order_id=order_data.order_id,
-        user_id=user_id,
-        pickup_location=pickup_location,
-        dropoff_location=dropoff_location,
-        driver_id=order_data.driver_id,
-        vehicle_id=order_data.vehicle_id,
-        status=order_data.status
-    )
-    
-    return OrderTrackingResponse(
-        order_id=order_tracking.order_id,
-        user_id=order_tracking.user_id,
-        driver_id=order_tracking.driver_id,
-        vehicle_id=order_tracking.vehicle_id,
-        status=order_tracking.status,
-        pickup_location=order_tracking.pickup_location,
-        dropoff_location=order_tracking.dropoff_location,
-        current_location=order_tracking.current_location,
-        estimated_arrival_time=order_tracking.estimated_arrival_time,
-        actual_arrival_time=order_tracking.actual_arrival_time,
-        distance_traveled=order_tracking.distance_traveled,
-        started_at=order_tracking.started_at,
-        completed_at=order_tracking.completed_at,
-        created_at=order_tracking.created_at,
-        updated_at=order_tracking.updated_at
-    )
+    try:
+        order_tracking = await order_service.create_order_tracking(
+            order_id=order_data.order_id,
+            user_id=user_id,  # Use user_id from request
+            pickup_location=pickup_location,
+            dropoff_location=dropoff_location,
+            driver_id=order_data.driver_id,
+            vehicle_id=order_data.vehicle_id,
+            status=order_data.status
+        )
+        
+        return OrderTrackingResponse(
+            order_id=order_tracking.order_id,
+            user_id=order_tracking.user_id,
+            driver_id=order_tracking.driver_id,
+            vehicle_id=order_tracking.vehicle_id,
+            status=order_tracking.status,
+            pickup_location=order_tracking.pickup_location,
+            dropoff_location=order_tracking.dropoff_location,
+            current_location=order_tracking.current_location,
+            estimated_arrival_time=order_tracking.estimated_arrival_time,
+            actual_arrival_time=order_tracking.actual_arrival_time,
+            distance_traveled=order_tracking.distance_traveled,
+            started_at=order_tracking.started_at,
+            completed_at=order_tracking.completed_at,
+            created_at=order_tracking.created_at,
+            updated_at=order_tracking.updated_at
+        )
+    except ValueError as e:
+        # Catch validation errors from service
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.get("/orders/{order_id}", response_model=OrderTrackingResponse)

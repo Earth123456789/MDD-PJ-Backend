@@ -1,3 +1,5 @@
+# app/services/messaging.py 
+
 import json
 import logging
 import asyncio
@@ -24,31 +26,48 @@ class RabbitMQService:
         self.queue_prefix = settings.RABBITMQ_QUEUE_PREFIX
         self.event_handlers = {}
         self.is_connected = False
+        self.retry_count = 0
+        self.max_retries = 3
     
     async def connect(self):
         """
-        Connect to RabbitMQ server.
+        Connect to RabbitMQ server with retry mechanism.
         """
         if self.is_connected:
             return
         
-        try:
-            # Connect to RabbitMQ
-            self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
-            self.channel = await self.connection.channel()
-            
-            # Create topic exchange
-            self.exchange = await self.channel.declare_exchange(
-                f"{self.queue_prefix}.topic",
-                ExchangeType.TOPIC,
-                durable=True
-            )
-            
-            self.is_connected = True
-            logger.info("Connected to RabbitMQ")
-        except Exception as e:
-            logger.error(f"Failed to connect to RabbitMQ: {e}")
-            raise
+        while self.retry_count < self.max_retries:
+            try:
+                logger.info(f"Connecting to RabbitMQ at {settings.RABBITMQ_URL} (Attempt {self.retry_count + 1}/{self.max_retries})")
+                
+                # Connect to RabbitMQ
+                self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
+                self.channel = await self.connection.channel()
+                
+                # Create topic exchange
+                self.exchange = await self.channel.declare_exchange(
+                    f"{self.queue_prefix}.topic",
+                    ExchangeType.TOPIC,
+                    durable=True
+                )
+                
+                self.is_connected = True
+                logger.info("Connected to RabbitMQ successfully")
+                self.retry_count = 0  # Reset retry counter on success
+                return
+            except Exception as e:
+                self.retry_count += 1
+                logger.error(f"Failed to connect to RabbitMQ (Attempt {self.retry_count}/{self.max_retries}): {e}")
+                
+                if self.retry_count < self.max_retries:
+                    # Wait before retrying (exponential backoff)
+                    wait_time = 2 ** self.retry_count
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.warning("Maximum RabbitMQ connection attempts reached, running in offline mode")
+                    # Put the system in an offline mode where it can still function without RabbitMQ
+                    break
     
     async def close(self):
         """
@@ -68,7 +87,8 @@ class RabbitMQService:
             message_data: The message data to publish
         """
         if not self.is_connected:
-            await self.connect()
+            logger.warning(f"Cannot publish message to {routing_key}: RabbitMQ not connected")
+            return False
         
         try:
             # Convert message data to JSON
@@ -92,9 +112,10 @@ class RabbitMQService:
             )
             
             logger.debug(f"Published message to {routing_key}: {message_data}")
+            return True
         except Exception as e:
             logger.error(f"Failed to publish message to {routing_key}: {e}")
-            raise
+            return False
     
     async def subscribe(
         self, 
@@ -111,7 +132,8 @@ class RabbitMQService:
             queue_name: Optional queue name, will be auto-generated if not provided
         """
         if not self.is_connected:
-            await self.connect()
+            logger.warning(f"Cannot subscribe to {routing_key}: RabbitMQ not connected")
+            return False
         
         try:
             # If queue name not provided, generate one based on routing key
@@ -141,9 +163,10 @@ class RabbitMQService:
             )
             
             logger.info(f"Subscribed to {routing_key} with queue {queue_name}")
+            return True
         except Exception as e:
             logger.error(f"Failed to subscribe to {routing_key}: {e}")
-            raise
+            return False
     
     async def _process_message(self, message: AbstractIncomingMessage, routing_key: str):
         """

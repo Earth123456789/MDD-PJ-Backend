@@ -1,60 +1,57 @@
-# app/config.py
-
-import os
-from typing import List, Optional
+from typing import Optional, Dict, Any, List
 from functools import lru_cache
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """
-    Application configuration settings.
+    """Application settings."""
     
-    Loads configuration from environment variables with sensible defaults.
-    """
-    # Application settings
-    APP_NAME: str = "Tracking Service"
+    # App settings
+    APP_NAME: str = "tracking-service"
     APP_ENV: str = "development"
-    APP_HOST: str = "0.0.0.0"
+    APP_DEBUG: bool = True
     APP_PORT: int = 8000
-    LOG_LEVEL: str = "INFO"
-
-    # Database settings
-    MONGODB_URI: str = "mongodb://localhost:27017"
-    MONGODB_DB: str = "tracking_service"
-
-    # RabbitMQ settings
-    RABBITMQ_URL: str = "amqp://guest:guest@localhost/"
+    APP_HOST: str = "0.0.0.0"
+    
+    # MongoDB
+    MONGODB_URI: str
+    MONGODB_DB: str = "tracking"
+    
+    # RabbitMQ
+    RABBITMQ_URL: str
     RABBITMQ_QUEUE_PREFIX: str = "tracking_service"
-
-    # JWT settings
-    JWT_SECRET: str = "your-secret-key"  # Replace with a strong secret in production
+    
+    # JWT and Authentication
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 30
-
-    # CORS settings
+    JWT_EXPIRATION: int = 3600  # seconds
+    
+    # Service URLs
+    USER_DRIVER_SERVICE_URL: str
+    MATCHING_SERVICE_URL: str
+    PAYMENT_SERVICE_URL: str
+    
+    # WebSocket settings
+    WS_HEARTBEAT_INTERVAL: int = 30  # seconds
+    
+    # CORS
     CORS_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["*"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
-
-    # WebSocket settings
-    WS_HEARTBEAT_INTERVAL: int = 30  # Seconds between heartbeats
-
-    # Model configuration
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    
+    # Logging
+    LOG_LEVEL: str = "debug"
+    
+    # Redis (optional)
+    REDIS_URL: Optional[str] = None
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """
-    Cached settings getter to avoid reloading environment variables.
-    
-    Returns:
-        Loaded application settings
-    """
+    """Return cached settings instance."""
     return Settings()

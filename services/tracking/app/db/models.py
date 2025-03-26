@@ -1,6 +1,6 @@
 # app/db/models.py
 
-from typing import List, Optional, Dict, Any
+from typing import List, Type, Optional, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
 from pydantic import Field
@@ -56,7 +56,7 @@ class LocationHistory(Document):
 class DriverLocation(Document):
     """Current driver location."""
     
-    driver_id: int
+    driver_id: Union[int, str]  # Accept either int or string IDs
     location: GeoPoint
     status: DriverStatus = DriverStatus.INACTIVE
     heading: Optional[float] = None  # in degrees (0-360)

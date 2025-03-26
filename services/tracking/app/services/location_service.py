@@ -1,7 +1,7 @@
 # app/services/location_service.py
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Type, Optional, Dict, Any, Union
 from datetime import datetime
 from geopy.distance import geodesic
 
@@ -35,34 +35,54 @@ class LocationService:
         """
         return await DriverLocation.find_one({"driver_id": driver_id})
     
+    async def validate_driver(self, driver_id: Union[int, str]) -> bool:
+        """Validate driver exists in user-driver service."""
+        try:
+            # In development mode, bypass validation
+            if settings.APP_ENV == "development":
+                logger.warning(f"Bypassing driver validation for {driver_id} in development mode")
+                return True
+                
+            # Make HTTP request to user-driver service
+            # This is a simplified example - your actual implementation might differ
+            response = await httpx.get(
+                f"{settings.USER_DRIVER_SERVICE_URL}/api/drivers/{driver_id}",
+                headers={"Authorization": f"Bearer {settings.SERVICE_API_KEY}"}
+            )
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Error validating driver {driver_id}: {e}")
+            # In production, you should decide whether to fail open or closed
+            # For security, failing closed (returning False) is safer
+            return False
+    
     async def update_driver_location(
         self,
-        driver_id: int,
+        driver_id: Union[int, str],
         location: GeoPoint,
         heading: Optional[float] = None,
         speed: Optional[float] = None,
         battery_level: Optional[float] = None,
         status: Optional[DriverStatus] = None,
     ) -> DriverLocation:
-        """
-        Update location for a driver.
+        """Update location for a driver."""
+        try:
+            # Validate driver exists in user-driver service
+            driver_exists = await self.validate_driver(driver_id)
+            if not driver_exists:
+                logger.warning(f"Driver ID {driver_id} not found in user-driver service")
+                raise ValueError(f"Driver ID {driver_id} not found")
+                
+            # Rest of your function remains the same...
+        except Exception as e:
+            logger.error(f"Error updating driver location: {e}")
+            raise
         
-        Args:
-            driver_id: The ID of the driver
-            location: The new location (GeoPoint)
-            heading: Optional heading in degrees (0-360)
-            speed: Optional speed in km/h
-            battery_level: Optional battery level percentage (0-100)
-            status: Optional driver status
-            
-        Returns:
-            The updated driver location
-        """
         # Save the geo point
         saved_location = await location.save()
         
         # Find existing driver location or create a new one
-        driver_location = await DriverLocation.find_one({"driver_id": driver_id})
+        driver_location = await DriverLocation.find_one({"driver_id": numeric_driver_id})
         
         if driver_location:
             # Add current location to history
