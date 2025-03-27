@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Notification {
+  id            Int      @id @default(autoincrement())
+  user_id       String 
+  title         String
+  message       String
+  type          NotificationType
+  read          Boolean  @default(false)
+  order_id      Int?
+  reference_id  String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model UserDevice {
+  id            Int      @id @default(autoincrement())
+  user_id       Int
+  device_token  String
+  device_type   DeviceType
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([user_id, device_token])
+}
+
+model UserCache {
+  user_id    String      @id
+  email      String?
+  full_name  String?
+  phone      String?
+  role       String?
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@map("user_cache")
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  DRIVER_UPDATE
+  SYSTEM
+  PAYMENT
+}
+
+enum DeviceType {
+  IOS
+  ANDROID
+  WEB
+}
