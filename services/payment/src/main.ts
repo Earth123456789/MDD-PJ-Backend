@@ -55,7 +55,15 @@ async function bootstrap() {
       .addTag('payments')
       .addTag('qr-codes')
       .addTag('driver-accounts')
-      .addBearerAuth()
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter JWT token',
+        },
+        'JWT-auth',
+      )
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

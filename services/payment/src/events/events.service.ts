@@ -1,101 +1,69 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Inject, OnModuleInit } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+// src/events/events.service.ts
+
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PaymentService } from '../payment/payment.service';
+import * as amqp from 'amqplib';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class EventsService implements OnModuleInit {
+export class EventsService implements OnModuleInit, OnModuleDestroy {
+  private connection: amqp.Connection;
+  private channel: amqp.Channel;
   private readonly logger = new Logger(EventsService.name);
+  private readonly queues = ['order-matched', 'order-status-changed'];
 
   constructor(
-    @Inject('RABBITMQ_SERVICE') private client: ClientProxy,
-    private paymentService: PaymentService,
+    private readonly configService: ConfigService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   async onModuleInit() {
+    const rabbitUrl = this.configService.get<string>('RABBITMQ_URL') || 'amqp://localhost:5672';
     try {
-      await this.client.connect();
-      this.logger.log('Connected to RabbitMQ');
-    } catch (error) {
-      this.logger.error(
-        `Failed to connect to RabbitMQ: ${error.message}`,
-        error.stack,
-      );
+      this.logger.log(`Connecting to RabbitMQ at ${rabbitUrl}`);
+      this.connection = await amqp.connect(rabbitUrl);
+      this.channel = await this.connection.createChannel();
+
+      for (const queue of this.queues) {
+        await this.channel.assertQueue(queue, { durable: true });
+        this.logger.log(`✅ Queue ready: ${queue}`);
+      }
+
+      await this.setupConsumers();
+    } catch (err) {
+      this.logger.error(`❌ Failed to connect to RabbitMQ: ${err.message}`);
     }
   }
 
-  /**
-   * Handle 'order.matched' event
-   * @param data The event data
-   */
-  async handleOrderMatched(data: any) {
-    try {
-      this.logger.log(`Handling order.matched event: ${JSON.stringify(data)}`);
-      return await this.paymentService.handleMatchCreated(data);
-    } catch (error) {
-      this.logger.error(
-        `Error handling order.matched event: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
+  async onModuleDestroy() {
+    await this.channel?.close();
+    await this.connection?.close();
+    this.logger.log('🔌 RabbitMQ connection closed');
   }
 
-  /**
-   * Handle 'driver.registered' event
-   * @param data The event data
-   */
-  async handleDriverRegistered(data: any) {
-    try {
-      this.logger.log(
-        `Handling driver.registered event: ${JSON.stringify(data)}`,
-      );
-      // You could auto-create a default bank account for new drivers here if needed
-      return { success: true, message: 'Driver registration acknowledged' };
-    } catch (error) {
-      this.logger.error(
-        `Error handling driver.registered event: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
+  private async setupConsumers() {
+    this.channel.consume('order-matched', async (msg) => {
+      if (msg) {
+        try {
+          const data = JSON.parse(msg.content.toString());
+          this.logger.log(`📦 [order-matched] ${JSON.stringify(data)}`);
+          await this.paymentService.handleMatchCreated(data);
+          this.channel.ack(msg);
+        } catch (err) {
+          this.logger.error(`❌ Failed to process order-matched: ${err.message}`);
+          this.channel.nack(msg, false, false);
+        }
+      }
+    });
   }
 
-  /**
-   * Handle 'order.status.updated' event
-   * @param data The event data
-   */
-  async handleOrderStatusUpdated(data: any) {
+  async publishEvent(queue: string, data: any) {
     try {
-      this.logger.log(
-        `Handling order.status.updated event: ${JSON.stringify(data)}`,
-      );
-      // You could handle specific order status changes here if needed for payment flow
-      return { success: true, message: 'Order status update acknowledged' };
-    } catch (error) {
-      this.logger.error(
-        `Error handling order.status.updated event: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Publish an event to RabbitMQ
-   */
-  async publishEvent(pattern: string, data: any) {
-    try {
-      this.client.emit(pattern, data);
-      this.logger.log(
-        `Published event ${pattern} with data: ${JSON.stringify(data)}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to publish event ${pattern}: ${error.message}`,
-        error.stack,
-      );
-      throw error;
+      await this.channel.assertQueue(queue, { durable: true });
+      this.channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), { persistent: true });
+      this.logger.log(`📤 Sent to queue "${queue}": ${JSON.stringify(data)}`);
+    } catch (err) {
+      this.logger.error(`❌ Failed to publish to ${queue}: ${err.message}`);
     }
   }
 }

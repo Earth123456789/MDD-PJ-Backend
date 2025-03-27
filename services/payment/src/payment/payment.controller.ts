@@ -10,6 +10,8 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
+  NotFoundException,  
+  BadRequestException  
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -40,48 +42,32 @@ export class PaymentController {
     description: 'The payment has been successfully created.',
   })
   async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
-    // Always set a default amount if none provided
-    if (!createPaymentDto.amount) {
-      try {
-        // Set a temporary default amount to pass validation
-        createPaymentDto.amount = 0;
-
-        // Get vehicle type from matching service using order ID
-        const orderDetails = await this.paymentService.getOrderDetails(
-          createPaymentDto.order_id,
+    try {
+      // First, validate that the order exists
+      const orderDetails = await this.paymentService.getOrderDetails(
+        createPaymentDto.order_id,
+      );
+      
+      if (!orderDetails) {
+        throw new NotFoundException(
+          `Order with ID ${createPaymentDto.order_id} not found in matching service`
         );
-        const vehicleId = orderDetails?.vehicle_matched;
-
-        if (vehicleId) {
-          // Get vehicle details to determine vehicle type
-          const vehicleDetails =
-            await this.paymentService.getVehicleDetails(vehicleId);
-
-          if (vehicleDetails && vehicleDetails.vehicle_type) {
-            // Calculate price based on order details and vehicle type
-            const priceDetails = await this.paymentService.calculateOrderPrice(
-              createPaymentDto.order_id,
-              vehicleDetails.vehicle_type,
-            );
-
-            // Update the DTO with the calculated amount
-            createPaymentDto.amount = priceDetails.price_details.totalAmount;
-          } else {
-            // If we can't get vehicle details, use a default amount
-            createPaymentDto.amount = 500; // Basic fare
-          }
-        } else {
-          // If no vehicle matched yet, use a default amount
-          createPaymentDto.amount = 500; // Basic fare
-        }
-      } catch (error) {
-        // Log error and use a default amount if calculation fails
-        console.error('Failed to calculate payment amount:', error);
-        createPaymentDto.amount = 500; // Default amount if calculation fails
       }
+      
+      // Continue with payment creation logic if order exists
+      if (!createPaymentDto.amount) {
+        const vehicleId = orderDetails?.vehicle_matched;
+        // Rest of your existing logic...
+      }
+  
+      return this.paymentService.createPayment(createPaymentDto);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // Handle other errors
+      throw new BadRequestException(`Failed to create payment: ${error.message}`);
     }
-
-    return this.paymentService.createPayment(createPaymentDto);
   }
 
   @Get('calculate/:orderId')

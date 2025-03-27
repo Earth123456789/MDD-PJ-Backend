@@ -73,12 +73,10 @@ model PaymentTransaction {
   transaction_type  String    // DEPOSIT, WITHDRAWAL, TRANSFER
   status            String    // PENDING, COMPLETED, FAILED
   external_ref_id   String?
-  driver_account_id Int
+  driver_id         Int
+  promptpay_number  String?   // เพิ่มฟิลด์นี้เพื่อเก็บเบอร์โทรศัพท์ PromptPay
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
-  
-  // Relations
-  driverAccount     DriverBankAccount @relation(fields: [driver_account_id], references: [id])
 }
 
 model PaymentLog {

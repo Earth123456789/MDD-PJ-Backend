@@ -47,17 +47,39 @@ export class PaymentService {
    */
   async createPayment(createPaymentDto: CreatePaymentDto) {
     try {
-      const { order_id, driver_id, amount, payment_method } = createPaymentDto;
+      const { order_id, driver_id, payment_method } = createPaymentDto;
+      let amount = createPaymentDto.amount;
 
-      // Ensure we have an amount - should already be handled by the controller,
-      // but this is a safeguard
-      const finalAmount = amount || 500; // Default if somehow still missing
+      // First, validate that the order exists
+      const orderDetails = await this.getOrderDetails(order_id);
+
+      if (!orderDetails) {
+        throw new NotFoundException(`Order with ID ${order_id} not found in matching service`);
+      }
+
+      // If amount is not provided, get it from the matching service
+      if (!amount) {
+        try {
+          if (orderDetails.price) {
+            // Use price from order details
+            amount = orderDetails.price;
+            this.logger.log(`Using price ${amount} from matching service for order ${order_id}`);
+          } else {
+            // If price not available in order details, use default
+            this.logger.warn(`No price available in order details for order ${order_id}`);
+            amount = 500; // Default amount
+          }
+        } catch (error) {
+          this.logger.warn(`Error determining price: ${error.message}`);
+          amount = 500; // Default amount if API call fails
+        }
+      }
 
       // Create the payment record - explicitly don't set qr_code_url here
       const payment = await this.prisma.payment.create({
         data: {
           order_id,
-          amount: finalAmount,
+          amount: amount ?? 0, // Use retrieved or provided amount, default to 0 if undefined
           payment_method: payment_method || PaymentMethod.QR_CODE,
           status: PaymentStatus.PENDING,
           driver_id,
@@ -88,7 +110,10 @@ export class PaymentService {
           payment_id: payment.id,
           status: 'CREATED',
           message: `Payment created for order ${order_id}`,
-          metadata: { ...createPaymentDto },
+          metadata: {
+            ...createPaymentDto,
+            price_source: amount !== createPaymentDto.amount ? 'matching_service' : 'input'
+          },
         },
       });
 
@@ -102,6 +127,10 @@ export class PaymentService {
 
       return payment;
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error; // Re-throw the NotFoundException to maintain proper HTTP response
+      }
+
       this.logger.error(
         `Failed to create payment: ${error.message}`,
         error.stack,
@@ -209,23 +238,32 @@ export class PaymentService {
         },
       });
 
-      // Find driver's bank account or create a default one if not exists
+      // Find or create driver account based on information from User-Driver Service
       let driverAccount = payment.driverAccount;
 
       if (!driverAccount && payment.driver_id) {
+        // Get driver information from User-Driver Service
+        const driverInfo = await this.getDriverWithUserInfo(payment.driver_id);
+
+        if (!driverInfo || !driverInfo.user) {
+          this.logger.warn(`Could not retrieve driver info for ID ${payment.driver_id}`);
+        }
+
         // Try to find an existing account for this driver
         driverAccount = await this.prisma.driverBankAccount.findFirst({
           where: { driver_id: payment.driver_id },
         });
 
-        // If no account exists, create a default one
+        // If no account exists, create a default one using phone from user-driver service
         if (!driverAccount) {
+          const phone = driverInfo?.user?.phone || this.configService.get<string>('DEFAULT_PROMPTPAY_PHONE');
+
           driverAccount = await this.prisma.driverBankAccount.create({
             data: {
               driver_id: payment.driver_id,
-              bank_name: 'Kasikorn Bank',
-              account_number: `DEF-${payment.driver_id}-${Date.now()}`,
-              account_holder: `Driver ${payment.driver_id}`,
+              bank_name: 'PromptPay',
+              account_number: phone, // Use phone number from user-driver service
+              account_holder: driverInfo?.user?.full_name || `Driver ${payment.driver_id}`,
               balance: 0,
               currency: 'THB',
             },
@@ -422,6 +460,28 @@ export class PaymentService {
   }
 
   /**
+   * Get driver information with user data from User-Driver Service
+ */
+  private async getDriverWithUserInfo(driverId: number): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${this.userDriverServiceUrl}/api/drivers/${driverId}`
+        ),
+      );
+
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data;
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.error(`Failed to get driver information: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Handle matches from the matching service and generate payment
    */
   async handleMatchCreated(data: any) {
@@ -508,9 +568,9 @@ export class PaymentService {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(this.deg2rad(lat1)) *
-        Math.cos(this.deg2rad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     return parseFloat(distance.toFixed(2));
@@ -525,12 +585,7 @@ export class PaymentService {
     try {
       const response = await firstValueFrom(
         this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${this.configService.get('services.vehicleMatching.apiKey')}`,
-            },
-          },
+          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}`
         ),
       );
 
@@ -581,17 +636,33 @@ export class PaymentService {
     }
   }
 
+  // Get price for an order
+  async getOrderPrice(orderId: number): Promise<number> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}/price`
+        ),
+      );
+
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data.price;
+      }
+
+      throw new Error('Price information not available');
+    } catch (error) {
+      this.logger.error(`Failed to get order price: ${error.message}`);
+      // Return a default value or throw error based on your preference
+      return 0; // Or throw new Error(`Could not retrieve price for order ${orderId}`);
+    }
+  }
+
   // Get vehicle details from matching service
   async getVehicleDetails(vehicleId: number): Promise<any> {
     try {
       const response = await firstValueFrom(
         this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/vehicles/${vehicleId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${this.configService.get('services.vehicleMatching.apiKey')}`,
-            },
-          },
+          `${this.vehicleMatchingServiceUrl}/vehicles/${vehicleId}`
         ),
       );
       const vehicleData = response.data.data;
@@ -620,12 +691,7 @@ export class PaymentService {
     try {
       const response = await firstValueFrom(
         this.httpService.get(
-          `${this.userDriverServiceUrl}/drivers/${driverId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${this.configService.get('services.userDriver.apiKey')}`,
-            },
-          },
+          `${this.userDriverServiceUrl}/drivers/${driverId}`
         ),
       );
       return response.data.data;
@@ -640,15 +706,15 @@ export class PaymentService {
     try {
       const response = await firstValueFrom(
         this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/api/vehicle-types`,
-          {
-            headers: {
-              Authorization: `Bearer ${this.configService.get('services.vehicleMatching.apiKey')}`,
-            },
-          },
+          `${this.vehicleMatchingServiceUrl}/api/vehicle-types`
         ),
       );
-      return response.data.data;
+
+      if (response && response.data && response.data.data) {
+        return response.data.data;
+      }
+
+      throw new Error('Vehicle types data is not available');
     } catch (error) {
       this.logger.error(`Failed to get vehicle types: ${error.message}`);
       // Return the default types if API call fails
