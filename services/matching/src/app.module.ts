@@ -44,7 +44,7 @@ import { Module, NestModule } from '@nestjs/common';
   providers: [],
 })
 export class AppModule {
-// implements NestModule
+  // implements NestModule
   // configure(consumer: MiddlewareConsumer) {
   //   consumer.apply(AuthMiddleware).forRoutes('order', 'vehicle', 'matching'); // 🔒 Protect ทุก route ที่ขึ้นต้นด้วย /order
   // }

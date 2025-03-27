@@ -63,18 +63,21 @@ export class OrderService {
       // Convert DTO to Prisma-compatible format with guaranteed status value
       const orderData: Prisma.OrderCreateInput = {
         user_id: createOrderDto.user_id,
+        vehicle: {
+          connect: { id: createOrderDto.vehicle_id },
+        },
         package_weight_kg: createOrderDto.package_weight_kg,
         package_volume_m3: createOrderDto.package_volume_m3,
         package_length_m: createOrderDto.package_length_m,
         package_width_m: createOrderDto.package_width_m,
         package_height_m: createOrderDto.package_height_m,
         status: createOrderDto.status || OrderStatus.PENDING,
-        price: createOrderDto.price, 
-      
-        pickup_location: createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
-        dropoff_location: createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
+        price: createOrderDto.price,
+        pickup_location:
+          createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
+        dropoff_location:
+          createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
       };
-      
 
       // Create the order in the database
       const order = await this.prisma.order.create({
@@ -255,32 +258,30 @@ export class OrderService {
 
     // Handle vehicle relationship properly
     if (updateOrderDto.vehicle_matched !== undefined) {
-      if (updateOrderDto.vehicle_matched === null) {
-        updateData.vehicle = { disconnect: true };
-      } else {
-        // Validate that the vehicle exists and has a valid driver
-        try {
-          const vehicle = await this.prisma.vehicle.findUnique({
-            where: { id: updateOrderDto.vehicle_matched },
-          });
+      if (updateOrderDto.vehicle_matched !== null) {
+        // Validate vehicle exists and has a valid driver
+        const vehicle = await this.prisma.vehicle.findUnique({
+          where: { id: updateOrderDto.vehicle_matched },
+        });
 
-          if (vehicle && vehicle.driver_id) {
-            const driverExists = await this.userDriverValidation.validateDriver(
-              vehicle.driver_id,
+        if (vehicle?.driver_id) {
+          const driverExists = await this.userDriverValidation.validateDriver(
+            vehicle.driver_id,
+          );
+
+          if (!driverExists) {
+            this.logger.warn(
+              `Vehicle ${updateOrderDto.vehicle_matched} has a driver (${vehicle.driver_id}) that does not exist in the user-driver service`,
             );
-            if (!driverExists) {
-              this.logger.warn(
-                `Vehicle ${updateOrderDto.vehicle_matched} has a driver (${vehicle.driver_id}) that does not exist in the user-driver service`,
-              );
-            }
           }
-        } catch (error) {
-          this.logger.warn(`Error validating vehicle driver: ${error.message}`);
         }
 
         updateData.vehicle = {
           connect: { id: updateOrderDto.vehicle_matched },
         };
+      } else {
+        // ❌ Don't allow disconnect if relation is required
+        this.logger.warn('Cannot disconnect a required vehicle relation');
       }
     }
 

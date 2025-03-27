@@ -71,7 +71,7 @@ export class MatchingService {
     private readonly queueService: QueueService,
     private readonly websocketGateway: WebsocketGateway,
     private readonly userDriverValidation: UserDriverValidationService,
-  ) {}
+  ) { }
 
   /**
    * Match an order with the most suitable vehicle using Knapsack algorithm
@@ -97,12 +97,15 @@ export class MatchingService {
       }
 
       // Check if order is already in a non-PENDING state
-      if (order.status !== OrderStatus.PENDING) {
-        this.logger.warn(
-          `Order ${orderId} is not in PENDING state (current: ${order.status})`,
-        );
+      const ineligibleStatuses: Array<'CANCELLED' | 'DELIVERED'> = [
+        'CANCELLED',
+        'DELIVERED',
+      ];
+      if (
+        ineligibleStatuses.includes(order.status as 'CANCELLED' | 'DELIVERED')
+      ) {
         throw new HttpException(
-          `Order ${orderId} is already being processed (status: ${order.status})`,
+          `Order ${orderId} is not eligible for matching (status: ${order.status})`,
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -123,9 +126,38 @@ export class MatchingService {
 
       // Update order status to MATCHING
       const previousStatus = order.status;
+      const matchedVehicle = await this.prisma.vehicle.findFirst({
+        where: {
+          status: 'AVAILABLE',
+          max_weight_kg: { gte: order.package_weight_kg },
+          max_volume_m3: { gte: order.package_volume_m3 },
+          length_m: { gte: order.package_length_m },
+          width_m: { gte: order.package_width_m },
+          height_m: { gte: order.package_height_m },
+        },
+      });
+      this.logger.log(
+        `[MATCHING] Order dimensions: weight=${order.package_weight_kg}, volume=${order.package_volume_m3}, length=${order.package_length_m}, width=${order.package_width_m}, height=${order.package_height_m}`,
+      );
+
+      if (!matchedVehicle) {
+        this.logger.warn(`[MATCHING] No vehicle matched for order ${order.id}`);
+      }
+
+      if (!matchedVehicle) {
+        this.logger.warn(`[MATCHING] No suitable vehicles found for order: ${orderIdNumber}`);
+        throw new HttpException('No suitable vehicle found for the order', HttpStatus.NOT_FOUND);
+      }
+
       const updatedOrder = await this.prisma.order.update({
         where: { id: orderIdNumber },
-        data: { status: OrderStatus.MATCHING },
+        data: {
+          status: OrderStatus.MATCHING,
+          vehicle_id: matchedVehicle.id,
+        },
+        include: {
+          vehicle: true,
+        },
       });
 
       // Notify about order status change via WebSocket and RabbitMQ
@@ -141,16 +173,27 @@ export class MatchingService {
       });
 
       // Find available vehicles
+      // ค้นหา vehicles ที่มีสถานะ AVAILABLE
       const availableVehicles = await this.prisma.vehicle.findMany({
-        where: { status: VehicleStatus.AVAILABLE },
+        where: {
+          status: 'AVAILABLE',
+        },
       });
 
+      this.logger.log(`[MATCHING] Found ${availableVehicles.length} candidate vehicles`);
+
+      availableVehicles.forEach(v => {
+        this.logger.log(`[MATCHING] Vehicle ${v.id} volume: ${v.max_volume_m3}`);
+      });
+
+      // เช็คถ้าไม่มีรถให้ใช้งานเลย
       if (availableVehicles.length === 0) {
         this.logger.warn(
-          `No available vehicles found for order: ${orderIdNumber}`,
+          `[MATCHING] No available vehicles found for order: ${orderIdNumber}`,
         );
         return null;
       }
+
 
       // Filter suitable vehicles based on capacity constraints
       const suitableVehicles = this.filterSuitableVehicles(
@@ -616,9 +659,9 @@ export class MatchingService {
       const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(this.deg2rad(pickup.latitude)) *
-          Math.cos(this.deg2rad(dropoff.latitude)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
+        Math.cos(this.deg2rad(dropoff.latitude)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distance = R * c;
       return parseFloat(distance.toFixed(2));
@@ -708,8 +751,8 @@ export class MatchingService {
         1 -
         Math.pow(
           (1 - weightUtilization) *
-            (1 - volumeUtilization) *
-            (1 - dimensionScore),
+          (1 - volumeUtilization) *
+          (1 - dimensionScore),
           1 / 3,
         );
 

@@ -84,8 +84,6 @@ export class CreateOrderDto {
     description: 'Package weight in kilograms',
     example: 50,
   })
-
-
   @ApiProperty({
     description: 'Package volume in cubic meters',
     example: 2.5,
@@ -135,5 +133,13 @@ export class CreateOrderDto {
   @IsInt()
   @IsPositive()
   price: number;
-  
+
+  @ApiProperty({
+    description: 'ID of the vehicle assigned to this order',
+    example: 1,
+  })
+  @IsInt()
+  @IsPositive()
+  @IsNotEmpty()
+  vehicle_id: number;
 }
