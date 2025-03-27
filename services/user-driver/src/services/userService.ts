@@ -131,7 +131,7 @@ export class UserService {
   /**
    * ดึงข้อมูลผู้ใช้ตาม ID
    */
-  public async getUserById(userId: number): Promise<any> {
+  public async getUserById(userId: string): Promise<any> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -154,7 +154,7 @@ export class UserService {
   /**
    * อัพเดทข้อมูลผู้ใช้
    */
-  public async updateUser(userId: number, data: UserUpdateInput): Promise<any> {
+  public async updateUser(userId: string, data: UserUpdateInput): Promise<any> {
     try {
       // ตรวจสอบว่ามีผู้ใช้อยู่ในระบบหรือไม่
       const existingUser = await prisma.user.findUnique({
@@ -201,7 +201,7 @@ export class UserService {
    * เปลี่ยนรหัสผ่าน
    */
   public async changePassword(
-    userId: number,
+    userId: string,
     currentPassword: string,
     newPassword: string,
   ): Promise<boolean> {
@@ -246,7 +246,7 @@ export class UserService {
   /**
    * ลบผู้ใช้
    */
-  public async deleteUser(userId: number): Promise<boolean> {
+  public async deleteUser(userId: string): Promise<boolean> {
     try {
       await prisma.user.delete({
         where: { id: userId },

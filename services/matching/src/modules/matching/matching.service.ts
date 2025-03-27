@@ -65,6 +65,7 @@ export class MatchingService {
       // Get the order details
       const order = await this.prisma.order.findUnique({
         where: { id: orderId },
+        include: { vehicle: true },
       });
 
       if (!order) {

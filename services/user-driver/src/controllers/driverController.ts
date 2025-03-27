@@ -23,14 +23,7 @@ export class DriverController {
       } = req.body;
 
       // ตรวจสอบข้อมูลที่จำเป็น
-      if (
-        !email ||
-        !password ||
-        !full_name ||
-        !phone ||
-        !license_number ||
-        !id_card_number
-      ) {
+      if (!email || !password || !full_name || !phone || !license_number || !id_card_number) {
         res.status(400).json({
           success: false,
           message: 'Missing required fields',
@@ -38,7 +31,7 @@ export class DriverController {
         return;
       }
 
-      // ลงทะเบียนคนขับใหม่
+      // สร้างคนขับใหม่
       const result = await driverService.registerDriver({
         email,
         password,
@@ -76,8 +69,7 @@ export class DriverController {
    */
   public async createDriver(req: Request, res: Response): Promise<void> {
     try {
-      const { user_id, license_number, id_card_number, current_location } =
-        req.body;
+      const { user_id, license_number, id_card_number, current_location } = req.body;
 
       // ตรวจสอบข้อมูลที่จำเป็น
       if (!user_id || !license_number || !id_card_number) {
@@ -88,9 +80,9 @@ export class DriverController {
         return;
       }
 
-      // สร้างข้อมูลคนขับ โดยแปลง user_id จาก string เป็น number
-      const newDriver = await driverService.createDriver({
-        user_id: parseInt(user_id),
+      // สร้างข้อมูลคนขับ
+      const driver = await driverService.createDriver({
+        user_id,
         license_number,
         id_card_number,
         current_location,
@@ -98,10 +90,10 @@ export class DriverController {
 
       res.status(201).json({
         success: true,
-        data: newDriver,
+        data: driver,
       });
     } catch (error: any) {
-      logger.error('Error creating driver', error);
+      logger.error('Error creating driver profile', error);
 
       if (error.message === 'User not found') {
         res.status(404).json({
@@ -129,7 +121,7 @@ export class DriverController {
 
       res.status(500).json({
         success: false,
-        message: 'An error occurred while creating driver',
+        message: 'An error occurred while creating driver profile',
       });
     }
   }
@@ -142,8 +134,8 @@ export class DriverController {
     try {
       const { id } = req.params;
 
-      // ดึงข้อมูลคนขับพร้อมข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const driver = await driverService.getDriverWithUserData(parseInt(id));
+      // ดึงข้อมูลคนขับพร้อมข้อมูลผู้ใช้
+      const driver = await driverService.getDriverWithUserData(id);
 
       if (!driver) {
         res.status(404).json({
@@ -161,7 +153,7 @@ export class DriverController {
       logger.error('Error fetching driver by ID', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching driver data',
+        message: 'An error occurred while fetching driver',
       });
     }
   }
@@ -174,13 +166,13 @@ export class DriverController {
     try {
       const { userId } = req.params;
 
-      // ดึงข้อมูลคนขับ โดยแปลง userId จาก string เป็น number
-      const driver = await driverService.getDriverByUserId(parseInt(userId));
+      // ดึงข้อมูลคนขับ
+      const driver = await driverService.getDriverByUserId(userId);
 
       if (!driver) {
         res.status(404).json({
           success: false,
-          message: 'Driver not found',
+          message: 'Driver not found for this user',
         });
         return;
       }
@@ -193,7 +185,7 @@ export class DriverController {
       logger.error('Error fetching driver by user ID', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while fetching driver data',
+        message: 'An error occurred while fetching driver',
       });
     }
   }
@@ -207,7 +199,7 @@ export class DriverController {
       const { id } = req.params;
       const { status } = req.body;
 
-      // ตรวจสอบสถานะ
+      // ตรวจสอบสถานะที่ส่งมา
       const validStatuses = ['active', 'inactive', 'suspended'];
       if (!status || !validStatuses.includes(status)) {
         res.status(400).json({
@@ -217,11 +209,8 @@ export class DriverController {
         return;
       }
 
-      // อัพเดทสถานะ โดยแปลง id จาก string เป็น number
-      const updatedDriver = await driverService.updateDriverStatus(
-        parseInt(id),
-        status,
-      );
+      // อัพเดทสถานะคนขับ
+      const updatedDriver = await driverService.updateDriverStatus(id, status);
 
       res.status(200).json({
         success: true,
@@ -249,15 +238,12 @@ export class DriverController {
    * อัพเดทตำแหน่งคนขับ
    * @route PATCH /api/drivers/:id/location
    */
-  public async updateDriverLocation(
-    req: Request,
-    res: Response,
-  ): Promise<void> {
+  public async updateDriverLocation(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const { latitude, longitude } = req.body;
 
-      // ตรวจสอบข้อมูลที่จำเป็น
+      // ตรวจสอบข้อมูลตำแหน่ง
       if (latitude === undefined || longitude === undefined) {
         res.status(400).json({
           success: false,
@@ -266,11 +252,11 @@ export class DriverController {
         return;
       }
 
-      // อัพเดทตำแหน่ง โดยแปลง id จาก string เป็น number
-      const updatedDriver = await driverService.updateDriverLocation(
-        parseInt(id),
-        { latitude, longitude },
-      );
+      // อัพเดทตำแหน่งคนขับ
+      const updatedDriver = await driverService.updateDriverLocation(id, {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+      });
 
       res.status(200).json({
         success: true,
@@ -301,27 +287,38 @@ export class DriverController {
   public async updateDriver(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const {
-        license_number,
-        id_card_number,
-        current_location,
-        status,
-        rating,
-      } = req.body;
+      const { license_number, id_card_number, current_location, status, rating } = req.body;
 
       // ตรวจสอบว่ามีข้อมูลที่จะอัพเดทหรือไม่
-      if (
-        !license_number &&
-        !id_card_number &&
-        !current_location &&
-        !status &&
-        rating === undefined
-      ) {
+      if (!license_number && !id_card_number && !current_location && !status && rating === undefined) {
         res.status(400).json({
           success: false,
           message: 'No data to update',
         });
         return;
+      }
+
+      // ตรวจสอบสถานะถ้ามีการส่งมา
+      if (status) {
+        const validStatuses = ['active', 'inactive', 'suspended'];
+        if (!validStatuses.includes(status)) {
+          res.status(400).json({
+            success: false,
+            message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+          });
+          return;
+        }
+      }
+
+      // ตรวจสอบคะแนนถ้ามีการส่งมา
+      if (rating !== undefined) {
+        if (rating < 0 || rating > 5) {
+          res.status(400).json({
+            success: false,
+            message: 'Rating must be between 0 and 5',
+          });
+          return;
+        }
       }
 
       // สร้างข้อมูลสำหรับอัพเดท
@@ -330,13 +327,10 @@ export class DriverController {
       if (id_card_number) updateData.id_card_number = id_card_number;
       if (current_location) updateData.current_location = current_location;
       if (status) updateData.status = status;
-      if (rating !== undefined) updateData.rating = rating;
+      if (rating !== undefined) updateData.rating = parseFloat(rating);
 
-      // อัพเดทข้อมูลคนขับ โดยแปลง id จาก string เป็น number
-      const updatedDriver = await driverService.updateDriver(
-        parseInt(id),
-        updateData,
-      );
+      // อัพเดทข้อมูลคนขับ
+      const updatedDriver = await driverService.updateDriver(id, updateData);
 
       res.status(200).json({
         success: true,
@@ -370,22 +364,30 @@ export class DriverController {
       const { rating } = req.body;
 
       // ตรวจสอบคะแนน
-      if (rating === undefined || rating < 0 || rating > 5) {
+      if (rating === undefined) {
         res.status(400).json({
           success: false,
-          message: 'Rating must be between 0 and 5',
+          message: 'Rating is required',
         });
         return;
       }
 
-      // ให้คะแนนคนขับ โดยแปลง id จาก string เป็น number
-      const updatedDriver = await driverService.rateDriver(
-        parseInt(id),
-        rating,
-      );
+      const ratingValue = parseFloat(rating);
+
+      if (isNaN(ratingValue) || ratingValue < 0 || ratingValue > 5) {
+        res.status(400).json({
+          success: false,
+          message: 'Rating must be a number between 0 and 5',
+        });
+        return;
+      }
+
+      // ให้คะแนนคนขับ
+      const updatedDriver = await driverService.rateDriver(id, ratingValue);
 
       res.status(200).json({
         success: true,
+        message: 'Driver rated successfully',
         data: updatedDriver,
       });
     } catch (error: any) {
@@ -395,6 +397,14 @@ export class DriverController {
         res.status(404).json({
           success: false,
           message: 'Driver not found',
+        });
+        return;
+      }
+
+      if (error.message === 'Rating must be between 0 and 5') {
+        res.status(400).json({
+          success: false,
+          message: 'Rating must be between 0 and 5',
         });
         return;
       }
@@ -414,8 +424,8 @@ export class DriverController {
     try {
       const { id } = req.params;
 
-      // ลบข้อมูลคนขับ โดยแปลง id จาก string เป็น number
-      await driverService.deleteDriver(parseInt(id));
+      // ลบข้อมูลคนขับ
+      await driverService.deleteDriver(id);
 
       res.status(200).json({
         success: true,
@@ -461,14 +471,14 @@ export class DriverController {
   }
 
   /**
-   * ค้นหาคนขับที่พร้อมให้บริการในบริเวณใกล้เคียง
+   * ค้นหาคนขับในบริเวณใกล้เคียง
    * @route GET /api/drivers/nearby
    */
   public async findNearbyDrivers(req: Request, res: Response): Promise<void> {
     try {
       const { latitude, longitude, radius = '5' } = req.query;
 
-      // ตรวจสอบข้อมูลที่จำเป็น
+      // ตรวจสอบข้อมูลตำแหน่ง
       if (!latitude || !longitude) {
         res.status(400).json({
           success: false,
@@ -478,7 +488,7 @@ export class DriverController {
       }
 
       // ค้นหาคนขับในบริเวณใกล้เคียง
-      const nearbyDrivers = await driverService.findAvailableDriversNearby(
+      const drivers = await driverService.findAvailableDriversNearby(
         {
           latitude: parseFloat(latitude as string),
           longitude: parseFloat(longitude as string),
@@ -488,7 +498,7 @@ export class DriverController {
 
       res.status(200).json({
         success: true,
-        data: nearbyDrivers,
+        data: drivers,
       });
     } catch (error) {
       logger.error('Error finding nearby drivers', error);

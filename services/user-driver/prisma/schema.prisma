@@ -11,14 +11,14 @@ datasource db {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  email      String   @unique
+  id         String    @id @default(uuid())
+  email      String    @unique
   password   String
   full_name  String
   phone      String
   role       UserRole
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
 }
 
 enum UserRole {
@@ -28,15 +28,15 @@ enum UserRole {
 }
 
 model Driver {
-  id              Int          @id @default(autoincrement())
-  user_id         Int          @unique
+  id              String      @id @default(uuid())
+  user_id         String      @unique
   license_number  String
   id_card_number  String
   current_location Json?
-  rating          Float        @default(0)
+  rating          Float       @default(0)
   status          DriverStatus
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
 }
 
 enum DriverStatus {
@@ -44,4 +44,3 @@ enum DriverStatus {
   inactive
   suspended
 }
-

@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const userService = new UserService();
 
 interface DriverCreateInput {
-  user_id: number;
+  user_id: string;
   license_number: string;
   id_card_number: string;
   current_location?: {
@@ -120,8 +120,7 @@ export class DriverService {
 
       // สร้างข้อมูลคนขับ
       const newDriver = await this.createDriver({
-        user_id:
-          typeof newUser.id === 'string' ? parseInt(newUser.id) : newUser.id,
+        user_id: newUser.id,
         license_number: data.license_number,
         id_card_number: data.id_card_number,
       });
@@ -144,7 +143,7 @@ export class DriverService {
   /**
    * ดึงข้อมูลคนขับตาม ID
    */
-  public async getDriverById(driverId: number): Promise<any> {
+  public async getDriverById(driverId: string): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
@@ -164,7 +163,7 @@ export class DriverService {
   /**
    * ดึงข้อมูลคนขับตาม user_id
    */
-  public async getDriverByUserId(userId: number): Promise<any> {
+  public async getDriverByUserId(userId: string): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
         where: { user_id: userId },
@@ -184,7 +183,7 @@ export class DriverService {
   /**
    * ดึงข้อมูลคนขับพร้อมข้อมูลผู้ใช้
    */
-  public async getDriverWithUserData(driverId: number): Promise<any> {
+  public async getDriverWithUserData(driverId: string): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
@@ -194,13 +193,7 @@ export class DriverService {
         return null;
       }
 
-      // แปลง user_id เป็น number (ถ้าเป็น string)
-      const userId =
-        typeof driver.user_id === 'string'
-          ? parseInt(driver.user_id)
-          : driver.user_id;
-
-      const userData = await userService.getUserById(userId);
+      const userData = await userService.getUserById(driver.user_id);
 
       return {
         ...driver,
@@ -216,7 +209,7 @@ export class DriverService {
    * อัพเดทสถานะคนขับ
    */
   public async updateDriverStatus(
-    driverId: number,
+    driverId: string,
     status: 'active' | 'inactive' | 'suspended',
   ): Promise<any> {
     try {
@@ -239,10 +232,7 @@ export class DriverService {
         event: 'DRIVER_STATUS_CHANGED',
         data: {
           driverId,
-          userId:
-            typeof driver.user_id === 'string'
-              ? parseInt(driver.user_id)
-              : driver.user_id,
+          userId: driver.user_id,
           status,
           previousStatus: driver.status,
           timestamp: new Date().toISOString(),
@@ -266,7 +256,7 @@ export class DriverService {
    * อัพเดทตำแหน่งคนขับ
    */
   public async updateDriverLocation(
-    driverId: number,
+    driverId: string,
     location: { latitude: number; longitude: number },
   ): Promise<any> {
     try {
@@ -289,10 +279,7 @@ export class DriverService {
         event: 'DRIVER_LOCATION_UPDATED',
         data: {
           driverId,
-          userId:
-            typeof driver.user_id === 'string'
-              ? parseInt(driver.user_id)
-              : driver.user_id,
+          userId: driver.user_id,
           location,
           timestamp: new Date().toISOString(),
         },
@@ -315,7 +302,7 @@ export class DriverService {
    * อัพเดทข้อมูลคนขับ
    */
   public async updateDriver(
-    driverId: number,
+    driverId: string,
     data: DriverUpdateInput,
   ): Promise<any> {
     try {
@@ -342,10 +329,7 @@ export class DriverService {
           event: 'DRIVER_STATUS_CHANGED',
           data: {
             driverId,
-            userId:
-              typeof driver.user_id === 'string'
-                ? parseInt(driver.user_id)
-                : driver.user_id,
+            userId: driver.user_id,
             status: data.status,
             previousStatus,
             timestamp: new Date().toISOString(),
@@ -359,10 +343,7 @@ export class DriverService {
           event: 'DRIVER_LOCATION_UPDATED',
           data: {
             driverId,
-            userId:
-              typeof driver.user_id === 'string'
-                ? parseInt(driver.user_id)
-                : driver.user_id,
+            userId: driver.user_id,
             location: data.current_location,
             timestamp: new Date().toISOString(),
           },
@@ -405,7 +386,7 @@ export class DriverService {
       // แต่ Prisma ไม่สามารถค้นหาข้ามตารางได้โดยตรง
       // เราจะใช้วิธีค้นหาข้อมูลผู้ใช้ก่อน แล้วจึงค้นหาข้อมูลคนขับตาม user_id
 
-      let userIds: number[] = [];
+      let userIds: string[] = [];
 
       if (query) {
         // ค้นหาผู้ใช้ที่มีบทบาทเป็นคนขับและข้อมูลตรงกับคำค้นหา
@@ -421,9 +402,7 @@ export class DriverService {
           select: { id: true },
         });
 
-        userIds = users.map((user) =>
-          typeof user.id === 'string' ? parseInt(user.id) : user.id,
-        );
+        userIds = users.map(user => user.id);
 
         if (userIds.length > 0) {
           where.user_id = { in: userIds };
@@ -450,13 +429,7 @@ export class DriverService {
       // ดึงข้อมูลผู้ใช้สำหรับคนขับที่พบ
       const driverWithUserData = await Promise.all(
         drivers.map(async (driver) => {
-          // แปลง user_id เป็น number (ถ้าเป็น string)
-          const userId =
-            typeof driver.user_id === 'string'
-              ? parseInt(driver.user_id)
-              : driver.user_id;
-
-          const userData = await userService.getUserById(userId);
+          const userData = await userService.getUserById(driver.user_id);
           return {
             ...driver,
             user: userData,
@@ -484,7 +457,7 @@ export class DriverService {
   /**
    * ให้คะแนนคนขับ
    */
-  public async rateDriver(driverId: number, rating: number): Promise<any> {
+  public async rateDriver(driverId: string, rating: number): Promise<any> {
     try {
       if (rating < 0 || rating > 5) {
         throw new Error('Rating must be between 0 and 5');
@@ -519,7 +492,7 @@ export class DriverService {
   /**
    * ลบข้อมูลคนขับ
    */
-  public async deleteDriver(driverId: number): Promise<boolean> {
+  public async deleteDriver(driverId: string): Promise<boolean> {
     try {
       await prisma.driver.delete({
         where: { id: driverId },

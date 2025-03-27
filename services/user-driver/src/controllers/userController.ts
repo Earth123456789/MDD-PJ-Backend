@@ -156,8 +156,8 @@ export class UserController {
     try {
       const { id } = req.params;
 
-      // ดึงข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const user = await userService.getUserById(parseInt(id));
+      // ดึงข้อมูลผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
+      const user = await userService.getUserById(id);
 
       if (!user) {
         res.status(404).json({
@@ -204,11 +204,8 @@ export class UserController {
       if (phone) updateData.phone = phone;
       if (email) updateData.email = email;
 
-      // อัพเดทข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const updatedUser = await userService.updateUser(
-        parseInt(id),
-        updateData,
-      );
+      // อัพเดทข้อมูลผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
+      const updatedUser = await userService.updateUser(id, updateData);
 
       res.status(200).json({
         success: true,
@@ -258,9 +255,9 @@ export class UserController {
         return;
       }
 
-      // เปลี่ยนรหัสผ่าน โดยแปลง id จาก string เป็น number
+      // เปลี่ยนรหัสผ่าน (ไม่ต้องแปลงเป็น number อีกต่อไป)
       const result = await userService.changePassword(
-        parseInt(id),
+        id,
         current_password,
         new_password,
       );
@@ -303,8 +300,8 @@ export class UserController {
     try {
       const { id } = req.params;
 
-      // ลบผู้ใช้ โดยแปลง id จาก string เป็น number
-      await userService.deleteUser(parseInt(id));
+      // ลบผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
+      await userService.deleteUser(id);
 
       res.status(200).json({
         success: true,

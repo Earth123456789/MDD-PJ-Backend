@@ -302,6 +302,34 @@ export class MatchingController {
     }
   }
 
+  @Get('order/:orderId')
+  @ApiOperation({ summary: 'Get order by ID' })
+  @ApiParam({ name: 'orderId', description: 'The ID of the order' })
+  @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderById(@Param('orderId') orderId: string) {
+    try {
+      const order = await this.matchingService.getOrderById(orderId);
+
+      if (!order) {
+        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        success: true,
+        data: order,
+        message: 'Order retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error getting order ${orderId}: ${error.message}`);
+      throw new HttpException(
+        'An error occurred while retrieving the order',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+
   @Get('order/:orderId/price')
   @ApiOperation({ summary: 'Get price for an order' })
   @ApiParam({ name: 'orderId', description: 'The ID of the order' })

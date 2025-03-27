@@ -1,5 +1,5 @@
 version: "3.8"
-name: shopdee-backend
+name: KhonsongDee-backend
 
 networks:
   traefik:
@@ -15,7 +15,7 @@ volumes:
 
 services:
   # Auth Service (postgres)
-  auth-service:
+   auth-service:
     build:
       context: ../services/auth
       dockerfile: Dockerfile
@@ -63,6 +63,7 @@ services:
     volumes:
       - ../services/user-driver:/app
       - /app/node_modules
+      - ./logs/user-driver:/app/logs
     networks:
       - traefik
     labels:
@@ -97,6 +98,7 @@ services:
     volumes:
       - ../services/matching:/app
       - /app/node_modules
+      - ./logs/matching:/app/logs
     command: >
       sh -c "
         npm install winston-elasticsearch &&
@@ -132,6 +134,7 @@ services:
     volumes:
       - ../services/payment:/app
       - /app/node_modules
+      - ./logs/payment:/app/logs
     networks:
       - traefik
     labels:
@@ -147,39 +150,40 @@ services:
         npx prisma migrate deploy &&
         npm run start:dev
       "
-
-  # Tracking Service (MongoDB Atlas)
-  tracking-service:
+    
+  notification-service:
     build:
-      context: ../services/tracking
+      context: ../services/notification
       dockerfile: Dockerfile
-      target: development
-    container_name: tracking-service
+    container_name: notification-service
     restart: always
     ports:
-      - "8000:8000"
+      - "5002:5002" 
     depends_on:
+      - notification-postgres
       - rabbitmq
       - redis
     env_file:
-      - ../services/tracking/.env
+      - ../services/notification/.env
     volumes:
-      - ../services/tracking:/app
+      - ../services/notification:/app
+      - /app/node_modules
+      - ./logs/notification:/app/logs
     networks:
       - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.tracking.entrypoints=web"
-      - "traefik.http.routers.tracking.rule=Host(`tracking.localhost`)"
-      - "traefik.http.services.tracking.loadbalancer.server.port=8000"
-    command: >      
+      - "traefik.http.routers.notification.entrypoints=web"
+      - "traefik.http.routers.notification.rule=Host(`notification.localhost`)"
+      - "traefik.http.services.notification.loadbalancer.server.port=5002"
+    command: >
       sh -c "
-          sleep 15 &&
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-        "
-
-  
+        sleep 15 &&
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm run start:dev
+      "
 
   # Database Services
   auth-postgres:
@@ -223,6 +227,21 @@ services:
       POSTGRES_DB: payment_service
     volumes:
       - payment_postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik
+
+  notification-postgres:
+    image: postgres:latest
+    container_name: notification-postgres
+    restart: always
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notification_service
+    volumes:
+      - notification_postgres_data:/var/lib/postgresql/data
     networks:
       - traefik
 
