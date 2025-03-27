@@ -12,7 +12,7 @@ interface ApiResponse<T> {
 }
 
 interface UserData {
-  id: number;
+  id: string;
   email: string;
   full_name: string;
   phone: string;
@@ -22,8 +22,8 @@ interface UserData {
 }
 
 interface DriverData {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   license_number: string;
   id_card_number: string;
   current_location?: {
@@ -54,7 +54,7 @@ export class UserDriverValidationService {
    * Validate that a user exists in the user-driver service
    * @param userId - The ID of the user to validate
    */
-  async validateUser(userId: number): Promise<boolean> {
+  async validateUser(userId: string): Promise<boolean> {
     try {
       this.logger.log(`Validating user with ID: ${userId}`);
 
@@ -83,7 +83,7 @@ export class UserDriverValidationService {
    * Validate that a driver exists in the user-driver service
    * @param driverId - The ID of the driver to validate
    */
-  async validateDriver(driverId: number): Promise<boolean> {
+  async validateDriver(driverId: string): Promise<boolean> {
     try {
       this.logger.log(`Validating driver with ID: ${driverId}`);
 
@@ -122,7 +122,7 @@ export class UserDriverValidationService {
    * Get driver information from the user-driver service
    * @param driverId - The ID of the driver
    */
-  async getDriverInfo(driverId: number): Promise<DriverData | null> {
+  async getDriverInfo(driverId: string): Promise<DriverData | null> {
     try {
       this.logger.log(`Getting driver info for ID: ${driverId}`);
 
@@ -147,7 +147,7 @@ export class UserDriverValidationService {
    * Get driver information by user ID from the user-driver service
    * @param userId - The ID of the user
    */
-  async getDriverByUserId(userId: number): Promise<DriverData | null> {
+  async getDriverByUserId(userId: string): Promise<DriverData | null> {
     try {
       this.logger.log(`Getting driver info for user ID: ${userId}`);
 
@@ -172,7 +172,7 @@ export class UserDriverValidationService {
    * Get user information from the user-driver service
    * @param userId - The ID of the user
    */
-  async getUserInfo(userId: number): Promise<UserData | null> {
+  async getUserInfo(userId: string): Promise<UserData | null> {
     try {
       this.logger.log(`Getting user info for ID: ${userId}`);
 
@@ -235,7 +235,7 @@ export class UserDriverValidationService {
    * @param location - The new location
    */
   async updateDriverLocation(
-    driverId: number,
+    driverId: string,
     location: { latitude: number; longitude: number },
   ): Promise<DriverData | null> {
     try {
@@ -263,7 +263,7 @@ export class UserDriverValidationService {
    * @param status - The new status ('active', 'inactive', or 'suspended')
    */
   async updateDriverStatus(
-    driverId: number,
+    driverId: string,
     status: 'active' | 'inactive' | 'suspended',
   ): Promise<DriverData | null> {
     try {
@@ -293,7 +293,7 @@ export class UserDriverValidationService {
    * @param rating - The rating (0-5)
    */
   async rateDriver(
-    driverId: number,
+    driverId: string,
     rating: number,
   ): Promise<DriverData | null> {
     try {

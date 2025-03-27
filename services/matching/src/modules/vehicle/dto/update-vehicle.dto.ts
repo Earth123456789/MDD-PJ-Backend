@@ -13,13 +13,11 @@ import { CreateVehicleDto } from './create-vehicle.dto';
 export class UpdateVehicleDto extends PartialType(CreateVehicleDto) {
   @ApiProperty({
     description: 'Driver ID',
-    example: 1001,
+    example: "04d7d1bd-dc00-469f-928d-2edad154806a",
     required: false,
   })
-  @IsInt()
-  @IsPositive()
   @IsOptional()
-  driver_id?: number;
+  driver_id?: string;
 
   @ApiProperty({
     description: 'Vehicle type',

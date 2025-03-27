@@ -58,7 +58,7 @@ export class OrderController {
   })
   async findAll(
     @Query('status') status?: OrderStatus,
-    @Query('user_id') userId?: number,
+    @Query('user_id') userId?: string,
     @Query('vehicle_id') vehicleId?: number,
   ) {
     return {

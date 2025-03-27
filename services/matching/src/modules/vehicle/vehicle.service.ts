@@ -10,8 +10,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserDriverValidationService } from 'src/user-driver-validation.service';
 
 interface DriverWithDistance {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   license_number: string;
   id_card_number: string;
   current_location?: {

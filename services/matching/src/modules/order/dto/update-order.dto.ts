@@ -52,13 +52,11 @@ class UpdateLocationDto {
 export class UpdateOrderDto {
   @ApiProperty({
     description: 'User ID',
-    example: 1001,
+    example: "04d7d1bd-dc00-469f-928d-2edad154806a",
     required: false,
   })
-  @IsInt()
-  @IsPositive()
   @IsOptional()
-  user_id?: number;
+  user_id?: string;
 
   @ApiProperty({
     description: 'Pickup location',

@@ -14,7 +14,7 @@ type OrderWithVehicle = Order & {
   vehicle?: {
     id: number;
     vehicle_type: string;
-    driver_id: number;
+    driver_id: string;
   } | null;
 };
 
@@ -125,7 +125,7 @@ export class OrderService {
 
   async findAll(filters: {
     status?: any;
-    userId?: number;
+    userId?: string;
     vehicleId?: number;
   }): Promise<OrderWithVehicle[]> {
     const { status, userId, vehicleId } = filters;
@@ -140,7 +140,7 @@ export class OrderService {
       // Optionally validate user exists
       try {
         const userExists = await this.userDriverValidation.validateUser(
-          Number(userId),
+          (userId),
         );
         if (!userExists) {
           this.logger.warn(
@@ -152,7 +152,7 @@ export class OrderService {
         this.logger.warn(`Error validating user ${userId}: ${error.message}`);
       }
 
-      where.user_id = Number(userId);
+      where.user_id = userId;
     }
 
     if (vehicleId) {

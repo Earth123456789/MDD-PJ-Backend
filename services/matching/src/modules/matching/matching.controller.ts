@@ -309,7 +309,7 @@ export class MatchingController {
       const orders = await this.matchingService.getAllOrders(
         status,
         vehicleId ? parseInt(vehicleId, 10) : undefined,
-        userId ? parseInt(userId, 10) : undefined,
+        userId ? userId : undefined,
       );
 
       return {

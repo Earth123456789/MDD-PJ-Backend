@@ -12,11 +12,9 @@ import { VehicleType, VehicleStatus } from '@prisma/client';
 export class CreateVehicleDto {
   @ApiProperty({
     description: 'Driver ID',
-    example: 1001,
+    example: "04d7d1bd-dc00-469f-928d-2edad154806a",
   })
-  @IsInt()
-  @IsPositive()
-  driver_id: number;
+  driver_id: string;
 
   @ApiProperty({
     description: 'Vehicle type',

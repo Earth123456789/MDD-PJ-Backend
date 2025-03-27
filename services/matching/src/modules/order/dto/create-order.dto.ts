@@ -47,11 +47,10 @@ class LocationDto {
 export class CreateOrderDto {
   @ApiProperty({
     description: 'User ID',
-    example: 1001,
+    example: "04d7d1bd-dc00-469f-928d-2edad154806a",
   })
-  @IsInt()
-  @IsPositive()
-  user_id: number;
+  @IsString()
+  user_id: string;
 
   @ApiProperty({
     description: 'Pickup location',

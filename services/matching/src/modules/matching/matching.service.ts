@@ -107,10 +107,10 @@ export class MatchingService {
         );
       }
 
-      // Validate that the user exists in the user-driver service
       const userExists = await this.userDriverValidation.validateUser(
         order.user_id,
       );
+
       if (!userExists) {
         this.logger.warn(
           `User with ID ${order.user_id} does not exist in the user-driver service`,
@@ -171,7 +171,7 @@ export class MatchingService {
       for (const vehicle of suitableVehicles) {
         if (vehicle.driver_id) {
           const driverExists = await this.userDriverValidation.validateDriver(
-            vehicle.driver_id,
+            vehicle.driver_id, // ไม่ต้องแปลงเป็น number, ใช้เป็น string
           );
           if (driverExists) {
             validatedVehicles = [...validatedVehicles, vehicle];
@@ -867,8 +867,9 @@ export class MatchingService {
 
       // Validate users for all orders exist in the user-driver service
       for (const order of orders) {
+        // ส่งค่าที่เป็น string แต่แปลงเฉพาะจุดที่จำเป็น
         const userExists = await this.userDriverValidation.validateUser(
-          order.user_id,
+          order.user_id, // ถ้า validateUser รองรับ string ก็ไม่ต้องแปลง
         );
         if (!userExists) {
           this.logger.warn(
@@ -1212,7 +1213,7 @@ export class MatchingService {
   async getAllOrders(
     status?: OrderStatus,
     vehicleId?: number,
-    userId?: number,
+    userId?: string,
   ): Promise<Order[]> {
     try {
       const where: Prisma.OrderWhereInput = {};

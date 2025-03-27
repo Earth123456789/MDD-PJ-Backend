@@ -38,7 +38,7 @@ enum VehicleType {
 
 model Order {
   id               Int         @id @default(autoincrement())
-  user_id          Int
+  user_id          String      // เปลี่ยนจาก Int เป็น String
   pickup_location  Json
   dropoff_location Json
   package_weight_kg Float
@@ -53,13 +53,13 @@ model Order {
   updated_at       DateTime    @updatedAt
   
   // Relations
-  matchingScores   MatchingScore[]
+  matchingScores   MatchingScore[] 
   matchingAttempts MatchingAttempt[]
 }
 
 model Vehicle {
   id             Int           @id @default(autoincrement())
-  driver_id      Int
+  driver_id      String        // เปลี่ยนจาก Int เป็น String
   vehicle_type   VehicleType
   max_weight_kg  Float
   max_volume_m3  Float
@@ -72,7 +72,7 @@ model Vehicle {
   
   // Relations
   orders         Order[]
-  matchingScores MatchingScore[]
+  matchingScores MatchingScore[] 
   matchingAttempts MatchingAttempt[]
 }
 
