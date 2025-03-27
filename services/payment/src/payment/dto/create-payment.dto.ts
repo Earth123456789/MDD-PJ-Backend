@@ -11,15 +11,6 @@ export class CreatePaymentDto {
   @IsNotEmpty()
   order_id: number;
 
-  @ApiProperty({
-    description: 'The payment amount in Thai Baht (THB)',
-    example: 3500.0,
-    required: false,
-  })
-  @IsNumber()
-  @IsOptional()
-  amount?: number;
-
   @ApiPropertyOptional({
     description: 'The payment method',
     enum: PaymentMethod,
@@ -27,7 +18,7 @@ export class CreatePaymentDto {
   })
   @IsEnum(PaymentMethod)
   @IsOptional()
-  payment_method?: PaymentMethod;
+  payment_method?: PaymentMethod = PaymentMethod.QR_CODE;
 
   @ApiPropertyOptional({
     description: 'The ID of the driver',

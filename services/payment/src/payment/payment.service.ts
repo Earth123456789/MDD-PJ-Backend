@@ -1,5 +1,3 @@
-// payment/src/payment/payment.service.ts
-
 import {
   Injectable,
   Logger,
@@ -11,7 +9,6 @@ import { ClientProxy } from '@nestjs/microservices';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { QrCodeService } from 'src/qrcode/qrcode.service';
 import { PricingCalculatorService } from 'src/pricing/pricing-calculator.service';
-import { PricingParams, PriceBreakdown } from 'src/pricing/pricing.types';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { PaymentStatus, PaymentMethod } from '@prisma/client';
@@ -19,6 +16,7 @@ import { VehicleType } from 'src/common/enums/vehicle-type.enum';
 import { firstValueFrom } from 'rxjs';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { PriceBreakdown } from '../pricing/pricing.types';
 
 @Injectable()
 export class PaymentService {
@@ -43,81 +41,90 @@ export class PaymentService {
   }
 
   /**
-   * Create a new payment for an order
+   * Get order details from matching service
+   * @param orderId Order ID
+   * @returns Order details or null
+   */
+  public async getOrderDetails(orderId: number): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}`
+        )
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to get order details: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Create a new payment
+   * @param createPaymentDto Payment creation details
+   * @returns Created payment
    */
   async createPayment(createPaymentDto: CreatePaymentDto) {
     try {
       const { order_id, driver_id, payment_method } = createPaymentDto;
-      let amount = createPaymentDto.amount;
+      let amount: number;
 
-      // First, validate that the order exists
       const orderDetails = await this.getOrderDetails(order_id);
 
       if (!orderDetails) {
         throw new NotFoundException(`Order with ID ${order_id} not found in matching service`);
       }
 
-      // If amount is not provided, get it from the matching service
-      if (!amount) {
-        try {
-          if (orderDetails.price) {
-            // Use price from order details
-            amount = orderDetails.price;
-            this.logger.log(`Using price ${amount} from matching service for order ${order_id}`);
-          } else {
-            // If price not available in order details, use default
-            this.logger.warn(`No price available in order details for order ${order_id}`);
-            amount = 500; // Default amount
-          }
-        } catch (error) {
-          this.logger.warn(`Error determining price: ${error.message}`);
-          amount = 500; // Default amount if API call fails
+      try {
+        if (orderDetails.price) {
+          amount = orderDetails.price;
+          this.logger.log(`Using price ${amount} from matching service for order ${order_id}`);
+        } else {
+          this.logger.warn(`No price available in order details for order ${order_id}`);
+          amount = 500;
         }
+      } catch (error) {
+        this.logger.warn(`Error determining price: ${error.message}`);
+        amount = 500;
       }
 
-      // Create the payment record - explicitly don't set qr_code_url here
       const payment = await this.prisma.payment.create({
         data: {
           order_id,
-          amount: amount ?? 0, // Use retrieved or provided amount, default to 0 if undefined
+          amount: amount,
           payment_method: payment_method || PaymentMethod.QR_CODE,
           status: PaymentStatus.PENDING,
-          driver_id,
+          driver_id: driver_id || 0, // Ensure driver_id is a number
         },
       });
 
-      // Generate QR code if payment method is QR_CODE
       if (payment.payment_method === PaymentMethod.QR_CODE) {
-        const qrCodeUrl = await this.qrCodeService.generatePaymentQrCode(
-          payment.id,
-          payment.amount,
-          payment.driver_id || 0, // Make sure driver_id is provided, default to 0 for error handling
+        const qrCodeUrl = await this.qrCodeService.generatePromptpayQrCode(
+          payment.id,           // paymentId (first argument)
+          payment.amount,       // amount (second argument)
+          payment.driver_id || 0 // driverId (third argument, ensure it's a number)
         );
 
-        // Update payment with QR code URL (base64 data URI)
         await this.prisma.payment.update({
           where: { id: payment.id },
           data: { qr_code_url: qrCodeUrl },
         });
 
-        // Update the local object
         payment.qr_code_url = qrCodeUrl;
       }
 
-      // Log payment creation
       await this.prisma.paymentLog.create({
         data: {
           payment_id: payment.id,
           status: 'CREATED',
           message: `Payment created for order ${order_id}`,
-          metadata: {
+          metadata: JSON.parse(JSON.stringify({
             ...createPaymentDto,
-            price_source: amount !== createPaymentDto.amount ? 'matching_service' : 'input'
-          },
+            price_source: 'matching_service'
+          })),
         },
       });
 
-      // Publish payment created event
       this.client.emit('payment.created', {
         payment_id: payment.id,
         order_id: payment.order_id,
@@ -128,298 +135,59 @@ export class PaymentService {
       return payment;
     } catch (error) {
       if (error instanceof NotFoundException) {
-        throw error; // Re-throw the NotFoundException to maintain proper HTTP response
+        throw error;
       }
 
-      this.logger.error(
-        `Failed to create payment: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException(
-        `Failed to create payment: ${error.message}`,
-      );
+      this.logger.error(`Failed to create payment: ${error.message}`, error.stack);
+      throw new BadRequestException(`Failed to create payment: ${error.message}`);
     }
   }
 
   /**
-   * Calculate price for a delivery order
-   * @param orderId - The ID of the order to calculate price for
-   * @param vehicleType - The type of vehicle used for delivery
+   * Handle order matched event and create a payment
+   * @param data Order matched event data
    */
-  async calculateOrderPrice(
-    orderId: number,
-    vehicleType: VehicleType,
-  ): Promise<any> {
+  async handleMatchCreated(data: any) {
     try {
-      // Fetch order details from matching service
-      const orderDetails = await this.getOrderDetails(orderId);
+      this.logger.log(`Processing matched order: ${JSON.stringify(data)}`);
 
-      if (!orderDetails) {
-        throw new NotFoundException(`Order with ID ${orderId} not found`);
+      // Validate required data
+      if (!data.order_id || !data.driver_id) {
+        throw new Error('Missing required order or driver information');
       }
 
-      // Extract pickup and dropoff locations
-      const { pickup_location, dropoff_location } = orderDetails;
-
-      // Calculate distance using great-circle distance formula (Haversine formula)
-      const distanceKm = this.calculateDistance(
-        pickup_location.latitude,
-        pickup_location.longitude,
-        dropoff_location.latitude,
-        dropoff_location.longitude,
-      );
-
-      // Estimate travel time
-      const estimatedMinutes =
-        this.pricingCalculator.estimateTravelTime(distanceKm);
-
-      // Check if it's surge time
-      const isSurgeTime = this.pricingCalculator.isSurgeTime();
-
-      // Calculate price
-      const priceBreakdown = this.pricingCalculator.calculatePrice({
-        vehicleType,
-        distanceKm,
-        estimatedMinutes,
-        isSurgeTime,
-        hasTolls: false, // Simplified for this example
+      // Create payment using the matched order details
+      const payment = await this.createPayment({
+        order_id: data.order_id,
+        driver_id: data.driver_id,
+        payment_method: PaymentMethod.QR_CODE,
       });
 
-      return {
-        order_id: orderId,
-        vehicle_type: vehicleType,
-        distance_km: distanceKm,
-        estimated_minutes: estimatedMinutes,
-        is_surge_time: isSurgeTime,
-        price_details: priceBreakdown,
-      };
+      this.logger.log(`Payment created for matched order: ${payment.id}`);
+
+      return payment;
     } catch (error) {
-      this.logger.error(
-        `Failed to calculate price for order ${orderId}: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to handle matched order: ${error.message}`, error.stack);
       throw error;
     }
   }
 
   /**
-   * Process payment when QR code is scanned
+   * Find all payments
    */
-  async processPayment(paymentId: number) {
-    try {
-      // Get the payment
-      const payment = await this.prisma.payment.findUnique({
-        where: { id: paymentId },
-        include: {
-          driverAccount: true,
-        },
-      });
-
-      if (!payment) {
-        throw new NotFoundException(`Payment with ID ${paymentId} not found`);
-      }
-
-      if (payment.status !== PaymentStatus.PENDING) {
-        throw new BadRequestException(`Payment is already ${payment.status}`);
-      }
-
-      // Update payment status to PROCESSING
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: PaymentStatus.PROCESSING },
-      });
-
-      // Log payment processing start
-      await this.prisma.paymentLog.create({
-        data: {
-          payment_id: paymentId,
-          status: 'PROCESSING',
-          message: `Payment processing started`,
-        },
-      });
-
-      // Find or create driver account based on information from User-Driver Service
-      let driverAccount = payment.driverAccount;
-
-      if (!driverAccount && payment.driver_id) {
-        // Get driver information from User-Driver Service
-        const driverInfo = await this.getDriverWithUserInfo(payment.driver_id);
-
-        if (!driverInfo || !driverInfo.user) {
-          this.logger.warn(`Could not retrieve driver info for ID ${payment.driver_id}`);
-        }
-
-        // Try to find an existing account for this driver
-        driverAccount = await this.prisma.driverBankAccount.findFirst({
-          where: { driver_id: payment.driver_id },
-        });
-
-        // If no account exists, create a default one using phone from user-driver service
-        if (!driverAccount) {
-          const phone = driverInfo?.user?.phone || this.configService.get<string>('DEFAULT_PROMPTPAY_PHONE');
-
-          driverAccount = await this.prisma.driverBankAccount.create({
-            data: {
-              driver_id: payment.driver_id,
-              bank_name: 'PromptPay',
-              account_number: phone, // Use phone number from user-driver service
-              account_holder: driverInfo?.user?.full_name || `Driver ${payment.driver_id}`,
-              balance: 0,
-              currency: 'THB',
-            },
-          });
-        }
-
-        // Link payment with driver account
-        await this.prisma.payment.update({
-          where: { id: paymentId },
-          data: { driver_account_id: driverAccount.id },
-        });
-      }
-
-      // Add transaction to driver's account if account exists
-      if (driverAccount) {
-        // Create transaction record
-        await this.prisma.paymentTransaction.create({
-          data: {
-            driver_account_id: driverAccount.id,
-            amount: payment.amount,
-            transaction_type: 'DEPOSIT',
-            status: 'COMPLETED',
-            description: `Payment for order ${payment.order_id}`,
-          },
-        });
-
-        // Update driver's balance
-        await this.prisma.driverBankAccount.update({
-          where: { id: driverAccount.id },
-          data: {
-            balance: { increment: payment.amount },
-          },
-        });
-      }
-
-      // Complete the payment
-      const completedPayment = await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: {
-          status: PaymentStatus.COMPLETED,
-          transaction_id: `TRX-${Date.now()}-${paymentId}`,
-        },
-      });
-
-      // Log payment completion
-      await this.prisma.paymentLog.create({
-        data: {
-          payment_id: paymentId,
-          status: 'COMPLETED',
-          message: `Payment completed successfully`,
-        },
-      });
-
-      // Publish payment completed event
-      this.client.emit('payment.completed', {
-        payment_id: completedPayment.id,
-        order_id: completedPayment.order_id,
-        amount: completedPayment.amount,
-        transaction_id: completedPayment.transaction_id,
-        driver_id: completedPayment.driver_id,
-      });
-
-      // Notify matching service about payment completion for status update
-      this.client.emit('order.payment.completed', {
-        order_id: completedPayment.order_id,
-        payment_id: completedPayment.id,
-      });
-
-      return completedPayment;
-    } catch (error) {
-      this.logger.error(
-        `Failed to process payment ${paymentId}: ${error.message}`,
-        error.stack,
-      );
-
-      // Log payment failure
-      await this.prisma.paymentLog.create({
-        data: {
-          payment_id: paymentId,
-          status: 'FAILED',
-          message: `Payment processing failed: ${error.message}`,
-        },
-      });
-
-      // Update payment status to FAILED
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: PaymentStatus.FAILED },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Update payment status
-   */
-  async updatePaymentStatus(
-    id: number,
-    updateStatusDto: UpdatePaymentStatusDto,
-  ) {
-    try {
-      const { status } = updateStatusDto;
-
-      const payment = await this.prisma.payment.findUnique({
-        where: { id },
-      });
-
-      if (!payment) {
-        throw new NotFoundException(`Payment with ID ${id} not found`);
-      }
-
-      // Update payment status
-      const updatedPayment = await this.prisma.payment.update({
-        where: { id },
-        data: { status },
-      });
-
-      // Log status update
-      await this.prisma.paymentLog.create({
-        data: {
-          payment_id: id,
-          status,
-          message: `Payment status updated to ${status}`,
-        },
-      });
-
-      // Publish payment status updated event
-      this.client.emit('payment.status.updated', {
-        payment_id: id,
-        order_id: payment.order_id,
-        status,
-      });
-
-      return updatedPayment;
-    } catch (error) {
-      this.logger.error(
-        `Failed to update payment status: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
+  async findAllPayments() {
+    return this.prisma.payment.findMany({
+      orderBy: { created_at: 'desc' },
+    });
   }
 
   /**
    * Get payment by ID
+   * @param id Payment ID
    */
   async getPaymentById(id: number) {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
-      include: {
-        driverAccount: true,
-        paymentLogs: {
-          orderBy: { created_at: 'desc' },
-        },
-      },
     });
 
     if (!payment) {
@@ -430,298 +198,133 @@ export class PaymentService {
   }
 
   /**
+   * Update payment status
+   * @param id Payment ID
+   * @param updateStatusDto Status update details
+   */
+  async updatePaymentStatus(id: number, updateStatusDto: UpdatePaymentStatusDto) {
+    try {
+      const updatedPayment = await this.prisma.payment.update({
+        where: { id },
+        data: {
+          status: updateStatusDto.status,
+        },
+      });
+
+      await this.prisma.paymentLog.create({
+        data: {
+          payment_id: id,
+          status: updateStatusDto.status,
+          message: `Payment status updated to ${updateStatusDto.status}`,
+          metadata: JSON.parse(JSON.stringify({
+            status: updateStatusDto.status
+          })),
+        },
+      });
+
+      return updatedPayment;
+    } catch (error) {
+      throw new BadRequestException(`Failed to update payment status: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete a payment
+   * @param id Payment ID
+   */
+  async deletePayment(id: number) {
+    try {
+      // First, check if payment exists
+      await this.getPaymentById(id);
+
+      // Then delete
+      return this.prisma.payment.delete({
+        where: { id },
+      });
+    } catch (error) {
+      throw new BadRequestException(`Failed to delete payment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process a payment
+   * @param id Payment ID
+   */
+  async processPayment(id: number) {
+    try {
+      const payment = await this.getPaymentById(id);
+
+      if (payment.status !== PaymentStatus.PENDING) {
+        throw new BadRequestException(`Payment ${id} cannot be processed. Current status: ${payment.status}`);
+      }
+
+      // Here you would integrate with a payment gateway
+      // For now, we'll just update the status
+      const processedPayment = await this.prisma.payment.update({
+        where: { id },
+        data: {
+          status: PaymentStatus.COMPLETED,
+        },
+      });
+
+      await this.prisma.paymentLog.create({
+        data: {
+          payment_id: id,
+          status: 'PROCESSED',
+          message: `Payment ${id} processed successfully`,
+        },
+      });
+
+      return processedPayment;
+    } catch (error) {
+      throw new BadRequestException(`Failed to process payment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calculate order price
+   * @param orderId Order ID
+   * @param vehicleType Vehicle type
+   */
+  async calculateOrderPrice(orderId: number, vehicleType: VehicleType): Promise<PriceBreakdown> {
+    const orderDetails = await this.getOrderDetails(orderId);
+
+    if (!orderDetails) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Estimate distance and calculate price
+    const distanceKm = orderDetails.distance || 0;
+    const estimatedMinutes = this.pricingCalculator.estimateTravelTime(distanceKm);
+    const isSurgeTime = this.pricingCalculator.isSurgeTime();
+
+    return this.pricingCalculator.calculatePrice({
+      vehicleType,
+      distanceKm,
+      estimatedMinutes,
+      isSurgeTime,
+    });
+  }
+
+  /**
    * Get payments by order ID
+   * @param orderId Order ID
    */
   async getPaymentsByOrderId(orderId: number) {
     return this.prisma.payment.findMany({
       where: { order_id: orderId },
-      include: {
-        paymentLogs: {
-          orderBy: { created_at: 'desc' },
-        },
-      },
       orderBy: { created_at: 'desc' },
     });
   }
 
   /**
    * Get payments by driver ID
+   * @param driverId Driver ID
    */
   async getPaymentsByDriverId(driverId: number) {
     return this.prisma.payment.findMany({
       where: { driver_id: driverId },
-      include: {
-        paymentLogs: {
-          orderBy: { created_at: 'desc' },
-        },
-      },
       orderBy: { created_at: 'desc' },
     });
-  }
-
-  /**
-   * Get driver information with user data from User-Driver Service
- */
-  private async getDriverWithUserInfo(driverId: number): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.userDriverServiceUrl}/api/drivers/${driverId}`
-        ),
-      );
-
-      if (response.data && response.data.success && response.data.data) {
-        return response.data.data;
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error(`Failed to get driver information: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * Handle matches from the matching service and generate payment
-   */
-  async handleMatchCreated(data: any) {
-    try {
-      this.logger.log(`Received match created event: ${JSON.stringify(data)}`);
-
-      const { order_id, vehicle_id, driver_id } = data;
-
-      // Check if payment already exists for this order
-      const existingPayment = await this.prisma.payment.findFirst({
-        where: { order_id },
-      });
-
-      if (existingPayment) {
-        this.logger.log(
-          `Payment already exists for order ${order_id}, skipping creation`,
-        );
-        return existingPayment;
-      }
-
-      // Get order details and vehicle details to calculate price
-      const orderDetails = await this.getOrderDetails(order_id);
-      const vehicleDetails = await this.getVehicleDetails(vehicle_id);
-
-      if (!orderDetails || !vehicleDetails) {
-        throw new Error(
-          'Could not retrieve order or vehicle details for price calculation',
-        );
-      }
-
-      // Calculate price based on order, vehicle, and route details
-      const priceCalculation = await this.calculateOrderPrice(
-        order_id,
-        vehicleDetails.vehicle_type,
-      );
-
-      const paymentData: CreatePaymentDto = {
-        order_id,
-        amount: priceCalculation.price_details.totalAmount,
-        payment_method: PaymentMethod.QR_CODE,
-        driver_id,
-      };
-
-      const payment = await this.createPayment(paymentData);
-
-      // Store price breakdown in payment logs
-      await this.prisma.paymentLog.create({
-        data: {
-          payment_id: payment.id,
-          status: 'PRICE_CALCULATED',
-          message: `Price calculated for order ${order_id}`,
-          metadata: priceCalculation.price_details,
-        },
-      });
-
-      this.logger.log(
-        `Created payment ${payment.id} for match between order ${order_id} and vehicle ${vehicle_id}`,
-      );
-
-      return payment;
-    } catch (error) {
-      this.logger.error(
-        `Failed to handle match created event: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Utility functions
-   */
-
-  // Calculate distance between two points using the Haversine formula
-  private calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ): number {
-    const R = 6371; // Radius of the earth in km
-    const dLat = this.deg2rad(lat2 - lat1);
-    const dLon = this.deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.deg2rad(lat1)) *
-      Math.cos(this.deg2rad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in km
-    return parseFloat(distance.toFixed(2));
-  }
-
-  private deg2rad(deg: number): number {
-    return deg * (Math.PI / 180);
-  }
-
-  // Get order details from matching service
-  async getOrderDetails(orderId: number): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}`
-        ),
-      );
-
-      // If the data structure is different, transform it to what we need
-      const data = response.data.data;
-
-      // Ensure pickup_location and dropoff_location have latitude and longitude properties
-      if (data && data.pickup_location && !data.pickup_location.latitude) {
-        // Handle different location structures
-        if (typeof data.pickup_location === 'string') {
-          // If it's a string, try to parse it
-          try {
-            data.pickup_location = JSON.parse(data.pickup_location);
-          } catch (e) {
-            this.logger.error(`Failed to parse pickup_location: ${e.message}`);
-          }
-        }
-
-        // If it's still not in the right format, try to extract lat/lng
-        if (!data.pickup_location.latitude && data.pickup_location.lat) {
-          data.pickup_location.latitude = data.pickup_location.lat;
-          data.pickup_location.longitude =
-            data.pickup_location.lng || data.pickup_location.lon;
-        }
-      }
-
-      // Do the same for dropoff location
-      if (data && data.dropoff_location && !data.dropoff_location.latitude) {
-        if (typeof data.dropoff_location === 'string') {
-          try {
-            data.dropoff_location = JSON.parse(data.dropoff_location);
-          } catch (e) {
-            this.logger.error(`Failed to parse dropoff_location: ${e.message}`);
-          }
-        }
-
-        if (!data.dropoff_location.latitude && data.dropoff_location.lat) {
-          data.dropoff_location.latitude = data.dropoff_location.lat;
-          data.dropoff_location.longitude =
-            data.dropoff_location.lng || data.dropoff_location.lon;
-        }
-      }
-
-      return data;
-    } catch (error) {
-      this.logger.error(`Failed to get order details: ${error.message}`);
-      return null;
-    }
-  }
-
-  // Get price for an order
-  async getOrderPrice(orderId: number): Promise<number> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}/price`
-        ),
-      );
-
-      if (response.data && response.data.success && response.data.data) {
-        return response.data.data.price;
-      }
-
-      throw new Error('Price information not available');
-    } catch (error) {
-      this.logger.error(`Failed to get order price: ${error.message}`);
-      // Return a default value or throw error based on your preference
-      return 0; // Or throw new Error(`Could not retrieve price for order ${orderId}`);
-    }
-  }
-
-  // Get vehicle details from matching service
-  async getVehicleDetails(vehicleId: number): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/vehicles/${vehicleId}`
-        ),
-      );
-      const vehicleData = response.data.data;
-
-      // Map the vehicle_type from the matching service to our enum if needed
-      if (vehicleData && vehicleData.vehicle_type) {
-        // Ensure vehicle_type is a valid enum value
-        const vehicleTypeValue = vehicleData.vehicle_type.toUpperCase();
-        if (Object.values(VehicleType).includes(vehicleTypeValue)) {
-          vehicleData.vehicle_type = vehicleTypeValue;
-        } else {
-          // Default to CAR if the type is not recognized
-          vehicleData.vehicle_type = VehicleType.CAR;
-        }
-      }
-
-      return vehicleData;
-    } catch (error) {
-      this.logger.error(`Failed to get vehicle details: ${error.message}`);
-      return null;
-    }
-  }
-
-  // Get driver details from user-driver service
-  private async getDriverDetails(driverId: number): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.userDriverServiceUrl}/drivers/${driverId}`
-        ),
-      );
-      return response.data.data;
-    } catch (error) {
-      this.logger.error(`Failed to get driver details: ${error.message}`);
-      return null;
-    }
-  }
-
-  // Get vehicle type details from matching service to ensure compatibility
-  private async getVehicleTypes(): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.vehicleMatchingServiceUrl}/api/vehicle-types`
-        ),
-      );
-
-      if (response && response.data && response.data.data) {
-        return response.data.data;
-      }
-
-      throw new Error('Vehicle types data is not available');
-    } catch (error) {
-      this.logger.error(`Failed to get vehicle types: ${error.message}`);
-      // Return the default types if API call fails
-      return Object.values(VehicleType).map((type) => ({
-        type,
-        description: `${type} vehicle`,
-      }));
-    }
   }
 }

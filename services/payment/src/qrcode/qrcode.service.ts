@@ -8,11 +8,87 @@ import * as QRCode from 'qrcode';
 export class QrCodeService {
   private readonly logger = new Logger(QrCodeService.name);
   private readonly userDriverServiceUrl: string;
+  private readonly DEFAULT_PHONE_NUMBER: string;
 
   constructor(private configService: ConfigService) {
     this.userDriverServiceUrl =
       this.configService.get<string>('services.userDriver.url') ||
       'http://localhost:3001';
+
+    this.DEFAULT_PHONE_NUMBER =
+      this.configService.get<string>('promptPay.defaultPhoneNumber') ||
+      '0891234567';
+  }
+
+  /**
+   * Get all drivers to validate driver ID
+   * @returns List of drivers
+   */
+  private async getAllDrivers(): Promise<any[]> {
+    try {
+      const response = await axios.get(
+        `${this.userDriverServiceUrl}/api/drivers`
+      );
+
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      this.logger.warn(`Failed to fetch drivers: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Check if driver ID exists
+   * @param driverId Driver ID to check
+   * @returns Boolean indicating if driver exists
+   */
+  private async isValidDriverId(driverId: number): Promise<boolean> {
+    const drivers = await this.getAllDrivers();
+    return drivers.some(driver => driver.id === driverId);
+  }
+
+  /**
+   * Get driver details from user-driver service
+   * @param driverId The driver ID
+   * @returns The driver details or null
+   */
+  async getDriverDetails(driverId: number): Promise<any> {
+    try {
+      // First, check if driver ID exists
+      const isValid = await this.isValidDriverId(driverId);
+      if (!isValid) {
+        this.logger.warn(`Driver ID ${driverId} not found`);
+        return null;
+      }
+
+      const response = await axios.get(
+        `${this.userDriverServiceUrl}/api/drivers/${driverId}`,
+      );
+
+      // Check if the response has the expected structure
+      if (
+        response.data &&
+        response.data.success &&
+        response.data.data &&
+        response.data.data.user
+      ) {
+        return response.data.data.user;
+      }
+
+      this.logger.warn(
+        `Driver details not found for driver ${driverId}, using default`,
+      );
+      return null;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get driver details from API: ${error.message}, using default`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -21,53 +97,38 @@ export class QrCodeService {
    * @returns The driver's phone number
    */
   async getDriverPhoneNumber(driverId: number): Promise<string> {
-    try {
-      const response = await axios.get(
-        `${this.userDriverServiceUrl}/api/drivers/${driverId}`,
-      );
+    // First, check if driver exists
+    const isValid = await this.isValidDriverId(driverId);
+    if (!isValid) {
+      this.logger.warn(`Driver ID ${driverId} not found, using default phone number`);
+      return this.DEFAULT_PHONE_NUMBER;
+    }
 
-      // Check if the response has the expected structure
-      // The phone number is in the nested user object
-      if (
-        response.data &&
-        response.data.success &&
-        response.data.data &&
-        response.data.data.user &&
-        response.data.data.user.phone
-      ) {
-        // Clean the phone number (remove spaces, dashes, etc.)
-        const phone = response.data.data.user.phone.replace(/[^0-9]/g, '');
+    // First, try to get driver details
+    const driverDetails = await this.getDriverDetails(driverId);
 
-        // Make sure it's a valid Thai phone number (should be 10 digits starting with 0)
-        if (phone.match(/^0\d{9}$/)) {
-          this.logger.log(`Using phone number ${phone} for driver ${driverId}`);
-          return phone;
-        } else {
-          this.logger.warn(
-            `Invalid Thai phone number format for driver ${driverId}, using default`,
-          );
-        }
+    // If driver details found and phone exists
+    if (driverDetails && driverDetails.phone) {
+      // Clean the phone number (remove spaces, dashes, etc.)
+      const phone = driverDetails.phone.replace(/[^0-9]/g, '');
+
+      // Make sure it's a valid Thai phone number (should be 10 digits starting with 0)
+      if (phone.match(/^0\d{9}$/)) {
+        this.logger.log(`Using phone number ${phone} for driver ${driverId}`);
+        return phone;
       } else {
         this.logger.warn(
-          `Driver phone number not found for driver ${driverId}, using default`,
+          `Invalid Thai phone number format for driver ${driverId}, using default`,
         );
       }
-
-      // Use a default phone number from configuration
-      return (
-        this.configService.get<string>('promptPay.defaultPhoneNumber') ||
-        '0891234567'
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Failed to get driver phone number from API: ${error.message}, using default`,
-      );
-      // Use a default phone number from configuration
-      return (
-        this.configService.get<string>('promptPay.defaultPhoneNumber') ||
-        '0891234567'
-      );
     }
+
+    // Use default phone number
+    this.logger.warn(
+      `No valid phone number found for driver ${driverId}, using default: ${this.DEFAULT_PHONE_NUMBER}`
+    );
+
+    return this.DEFAULT_PHONE_NUMBER;
   }
 
   /**
@@ -77,21 +138,16 @@ export class QrCodeService {
    * @param driverId The driver ID
    * @returns The base64 encoded QR code data
    */
-  async generatePaymentQrCode(
+  async generatePromptpayQrCode(
     paymentId: number,
     amount: number,
     driverId: number,
   ): Promise<string> {
     try {
-      // Get the driver's phone number
       const phoneNumber = await this.getDriverPhoneNumber(driverId);
 
-      // Create PromptPay payload
-      const payload = generatePayload(phoneNumber, {
-        amount, // amount in Thai Baht
-      });
+      const payload = generatePayload(phoneNumber, { amount });
 
-      // Convert payload to QR code
       const qrCodeData = await new Promise<string>((resolve, reject) => {
         QRCode.toDataURL(
           payload,
@@ -105,11 +161,8 @@ export class QrCodeService {
             },
           },
           (err, url) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(url);
-            }
+            if (err) reject(err);
+            else resolve(url);
           },
         );
       });

@@ -54,7 +54,6 @@ async function bootstrap() {
       .setVersion('1.0')
       .addTag('payments')
       .addTag('qr-codes')
-      .addTag('driver-accounts')
       .addBearerAuth(
         {
           type: 'http',

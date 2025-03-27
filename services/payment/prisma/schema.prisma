@@ -1,5 +1,3 @@
-// payment/prisma/schema.prisma
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
@@ -38,31 +36,9 @@ model Payment {
   driver_id      Int?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
-  
-  // Relations
-  driverAccount  DriverBankAccount? @relation(fields: [driver_account_id], references: [id])
-  driver_account_id Int?
-  paymentLogs    PaymentLog[]
-}
 
-model DriverBankAccount {
-  id                Int       @id @default(autoincrement())
-  driver_id         Int       @unique
-  bank_name         String
-  account_number    String
-  account_holder    String
-  routing_number    String?
-  swift_code        String?
-  balance           Float     @default(0)
-  currency          String    @default("THB")
-  is_default        Boolean   @default(true)
-  is_verified       Boolean   @default(false)
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
-  
   // Relations
-  payments          Payment[]
-  paymentTransactions PaymentTransaction[]
+  paymentLogs    PaymentLog[]
 }
 
 model PaymentTransaction {
@@ -74,19 +50,19 @@ model PaymentTransaction {
   status            String    // PENDING, COMPLETED, FAILED
   external_ref_id   String?
   driver_id         Int
-  promptpay_number  String?   // เพิ่มฟิลด์นี้เพื่อเก็บเบอร์โทรศัพท์ PromptPay
+  promptpay_number  String?   // เก็บเบอร์โทร PromptPay แทน
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 }
 
 model PaymentLog {
-  id                Int       @id @default(autoincrement())
-  payment_id        Int
-  status            String
-  message           String?
-  metadata          Json?
-  created_at        DateTime  @default(now())
-  
+  id          Int      @id @default(autoincrement())
+  payment_id  Int
+  status      String
+  message     String?
+  metadata    Json?
+  created_at  DateTime @default(now())
+
   // Relations
-  payment           Payment   @relation(fields: [payment_id], references: [id])
+  payment     Payment  @relation(fields: [payment_id], references: [id])
 }

@@ -10,7 +10,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
 import { PaymentModule } from './payment/payment.module';
 import { QrCodeModule } from './qrcode/qrcode.module';
-import { DriverAccountModule } from './driver-account/driver-account.module';
 import { LoggingConfigModule } from './config/logging-config.module';
 // import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
@@ -100,7 +99,6 @@ import config from './config/configuration';
     // Feature modules
     PaymentModule,
     QrCodeModule,
-    DriverAccountModule,
     HealthModule,
   ],
 })
