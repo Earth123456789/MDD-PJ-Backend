@@ -11,7 +11,7 @@ datasource db {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
+  id         String   @id @default(uuid()) // เปลี่ยนจาก Int เป็น String
   email      String   @unique
   password   String
   full_name  String
@@ -21,6 +21,7 @@ model User {
   updated_at DateTime @updatedAt
 }
 
+
 enum UserRole {
   customer
   driver
@@ -29,7 +30,7 @@ enum UserRole {
 
 model Driver {
   id              Int          @id @default(autoincrement())
-  user_id         Int          @unique
+  user_id         String          @unique
   license_number  String
   id_card_number  String
   current_location Json?

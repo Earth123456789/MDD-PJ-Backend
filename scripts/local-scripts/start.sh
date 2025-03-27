@@ -32,9 +32,9 @@ start_service() {
 }
 
 # Start each service with appropriate command
-start_service "payment" "npm run start:dev" &  # Port 3003
+
 start_service "auth" "npm run start" &        # Port 5001
-start_service "matching" "npm run start:dev" &  # Port 3002
+
 start_service "user-driver" "npm run start" &   # Port 3001
 
 echo -e "${GREEN}All services are starting. Check individual logs for status.${NC}"

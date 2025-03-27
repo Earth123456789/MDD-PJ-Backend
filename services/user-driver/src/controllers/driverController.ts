@@ -88,9 +88,11 @@ export class DriverController {
         return;
       }
 
+      const userIdAsString = user_id;
+
       // สร้างข้อมูลคนขับ โดยแปลง user_id จาก string เป็น number
       const newDriver = await driverService.createDriver({
-        user_id: parseInt(user_id),
+        user_id: userIdAsString, // ส่ง user_id ที่เป็น string ตามที่ Prisma กำหนด
         license_number,
         id_card_number,
         current_location,
@@ -173,10 +175,10 @@ export class DriverController {
   public async getDriverByUserId(req: Request, res: Response): Promise<void> {
     try {
       const { userId } = req.params;
-
-      // ดึงข้อมูลคนขับ โดยแปลง userId จาก string เป็น number
-      const driver = await driverService.getDriverByUserId(parseInt(userId));
-
+  
+      // ดึงข้อมูลคนขับโดยไม่ต้องแปลง userId เป็น number
+      const driver = await driverService.getDriverByUserId(userId); // ใช้ userId เป็น string ตรงๆ
+  
       if (!driver) {
         res.status(404).json({
           success: false,
@@ -184,7 +186,7 @@ export class DriverController {
         });
         return;
       }
-
+  
       res.status(200).json({
         success: true,
         data: driver,
@@ -197,7 +199,7 @@ export class DriverController {
       });
     }
   }
-
+  
   /**
    * อัพเดทสถานะคนขับ
    * @route PATCH /api/drivers/:id/status
@@ -460,42 +462,42 @@ export class DriverController {
     }
   }
 
-  /**
-   * ค้นหาคนขับที่พร้อมให้บริการในบริเวณใกล้เคียง
-   * @route GET /api/drivers/nearby
-   */
-  public async findNearbyDrivers(req: Request, res: Response): Promise<void> {
-    try {
-      const { latitude, longitude, radius = '5' } = req.query;
+  // /**
+  //  * ค้นหาคนขับที่พร้อมให้บริการในบริเวณใกล้เคียง
+  //  * @route GET /api/drivers/nearby
+  //  */
+  // public async findNearbyDrivers(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const { latitude, longitude, radius = '5' } = req.query;
 
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!latitude || !longitude) {
-        res.status(400).json({
-          success: false,
-          message: 'Latitude and longitude are required',
-        });
-        return;
-      }
+  //     // ตรวจสอบข้อมูลที่จำเป็น
+  //     if (!latitude || !longitude) {
+  //       res.status(400).json({
+  //         success: false,
+  //         message: 'Latitude and longitude are required',
+  //       });
+  //       return;
+  //     }
 
-      // ค้นหาคนขับในบริเวณใกล้เคียง
-      const nearbyDrivers = await driverService.findAvailableDriversNearby(
-        {
-          latitude: parseFloat(latitude as string),
-          longitude: parseFloat(longitude as string),
-        },
-        parseFloat(radius as string),
-      );
+  //     // ค้นหาคนขับในบริเวณใกล้เคียง
+  //     const nearbyDrivers = await driverService.findAvailableDriversNearby(
+  //       {
+  //         latitude: parseFloat(latitude as string),
+  //         longitude: parseFloat(longitude as string),
+  //       },
+  //       parseFloat(radius as string),
+  //     );
 
-      res.status(200).json({
-        success: true,
-        data: nearbyDrivers,
-      });
-    } catch (error) {
-      logger.error('Error finding nearby drivers', error);
-      res.status(500).json({
-        success: false,
-        message: 'An error occurred while finding nearby drivers',
-      });
-    }
-  }
+  //     res.status(200).json({
+  //       success: true,
+  //       data: nearbyDrivers,
+  //     });
+  //   } catch (error) {
+  //     logger.error('Error finding nearby drivers', error);
+  //     res.status(500).json({
+  //       success: false,
+  //       message: 'An error occurred while finding nearby drivers',
+  //     });
+  //   }
+  // }
 }

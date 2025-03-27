@@ -1,75 +1,79 @@
-// user-driver-service/src/middlewares/authMiddleware.ts
-
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET; // ใช้ HS256
 
 interface DecodedToken {
-  userId: string;
+  id: string;
   email: string;
-  role: string;
   iat: number;
   exp: number;
 }
 
-/**
- * middleware สำหรับตรวจสอบ JWT token และเพิ่มข้อมูลผู้ใช้ลงใน request
- */
 export const authMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction,
-): void => {
+) => {
   try {
-    // ดึง token จาก header
     const authHeader = req.headers.authorization;
+    
+    // Log the authorization header to check if it's received properly
+    logger.info('Authorization Header:', authHeader);
+    logger.info('JWT_SECRET:', JWT_SECRET);
+
+    
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({
-        success: false,
-        message: 'Authorization token is required',
-      });
-      return;
+      logger.error('Authorization header missing or incorrect');
+      return res
+        .status(401)
+        .json({ success: false, message: 'Authorization token is required' });
     }
 
     const token = authHeader.split(' ')[1];
+    
+    // Log the extracted token for verification
+    logger.info('Token extracted:', token);
 
-    // ตรวจสอบ token
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'your-secret-key',
-    ) as DecodedToken;
+    // Verify the token using JWT_SECRET
+    const decoded = jwt.verify(token, JWT_SECRET as string, {
+      algorithms: ['HS256'],
+    }) as DecodedToken;
 
-    // เพิ่มข้อมูลผู้ใช้ลงใน request
+    // Log decoded token for debugging
+    logger.info('Decoded Token:', decoded);
+
+    // Attach decoded user to request object
     (req as any).user = decoded;
-
-    // ไปยัง middleware หรือ controller ถัดไป
+    
+    // Continue to the next middleware or route handler
     next();
   } catch (error: any) {
     logger.error('Auth middleware error', error);
 
+    // Handle different JWT errors
     if (error.name === 'TokenExpiredError') {
-      res.status(401).json({
-        success: false,
-        message: 'Token has expired',
-      });
-      return;
+      return res
+        .status(401)
+        .json({ success: false, message: 'Token has expired' });
     }
 
     if (error.name === 'JsonWebTokenError') {
-      res.status(401).json({
-        success: false,
-        message: 'Invalid token',
-      });
-      return;
+      return res
+        .status(401)
+        .json({ success: false, message: 'Invalid token' });
     }
 
-    res.status(500).json({
-      success: false,
-      message: 'Authentication error',
-    });
+    // General error response for unexpected errors
+    res.status(500).json({ success: false, message: 'Authentication error' });
   }
 };
+
 
 /**
  * middleware สำหรับตรวจสอบบทบาทของผู้ใช้

@@ -4,12 +4,13 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { publishMessage } from '../config/rabbitmq';
 import { UserService } from './userService';
+import { AnyMxRecord } from 'dns';
 
 const prisma = new PrismaClient();
 const userService = new UserService();
 
 interface DriverCreateInput {
-  user_id: number;
+  user_id: string; // ใช้เป็น string แทน number
   license_number: string;
   id_card_number: string;
   current_location?: {
@@ -59,6 +60,7 @@ export class DriverService {
       }
 
       // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
+      // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
       const existingDriver = await prisma.driver.findUnique({
         where: { user_id: data.user_id },
       });
@@ -70,12 +72,10 @@ export class DriverService {
       // สร้างข้อมูลคนขับใหม่
       const newDriver = await prisma.driver.create({
         data: {
-          user_id: data.user_id,
+          user_id: data.user_id, // ใช้ user_id ที่เป็น string ตามที่กำหนดใน Prisma schema
           license_number: data.license_number,
           id_card_number: data.id_card_number,
-          current_location: data.current_location
-            ? data.current_location
-            : undefined,
+          current_location: data.current_location || undefined, // ตรวจสอบกรณีที่ไม่มี current_location
           status: 'inactive', // เริ่มต้นเป็น inactive รอการตรวจสอบ
           rating: 0, // เริ่มต้นด้วยคะแนน 0
         },
@@ -164,7 +164,7 @@ export class DriverService {
   /**
    * ดึงข้อมูลคนขับตาม user_id
    */
-  public async getDriverByUserId(userId: number): Promise<any> {
+  public async getDriverByUserId(userId: string): Promise<any> {
     try {
       const driver = await prisma.driver.findUnique({
         where: { user_id: userId },
@@ -189,19 +189,16 @@ export class DriverService {
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
       });
-
+  
       if (!driver) {
         return null;
       }
-
-      // แปลง user_id เป็น number (ถ้าเป็น string)
-      const userId =
-        typeof driver.user_id === 'string'
-          ? parseInt(driver.user_id)
-          : driver.user_id;
-
+  
+      // ไม่ต้องแปลง user_id แล้ว
+      const userId = driver.user_id;  // ใช้ user_id ตรงๆ
+  
       const userData = await userService.getUserById(userId);
-
+  
       return {
         ...driver,
         user: userData,
@@ -211,6 +208,7 @@ export class DriverService {
       throw error;
     }
   }
+  
 
   /**
    * อัพเดทสถานะคนขับ
@@ -421,10 +419,6 @@ export class DriverService {
           select: { id: true },
         });
 
-        userIds = users.map((user) =>
-          typeof user.id === 'string' ? parseInt(user.id) : user.id,
-        );
-
         if (userIds.length > 0) {
           where.user_id = { in: userIds };
         } else if (query) {
@@ -449,20 +443,16 @@ export class DriverService {
 
       // ดึงข้อมูลผู้ใช้สำหรับคนขับที่พบ
       const driverWithUserData = await Promise.all(
-        drivers.map(async (driver) => {
-          // แปลง user_id เป็น number (ถ้าเป็น string)
-          const userId =
-            typeof driver.user_id === 'string'
-              ? parseInt(driver.user_id)
-              : driver.user_id;
-
-          const userData = await userService.getUserById(userId);
+        drivers.map(async (driver:any) => {
+          // ไม่ต้องแปลง user_id เป็น number แล้ว
+          const userData = await userService.getUserById(driver.user_id);
           return {
             ...driver,
             user: userData,
           };
         }),
       );
+      
 
       const totalPages = Math.ceil(totalCount / limit);
 
@@ -537,88 +527,87 @@ export class DriverService {
   /**
    * ค้นหาคนขับที่พร้อมให้บริการในบริเวณใกล้เคียง
    */
-  public async findAvailableDriversNearby(
-    location: { latitude: number; longitude: number },
-    radius: number = 5,
-  ): Promise<any> {
-    try {
-      // ดึงข้อมูลคนขับที่มีสถานะ active โดยไม่มีเงื่อนไข current_location
-      const activeDrivers = await prisma.driver.findMany({
-        where: {
-          status: 'active',
-        },
-      });
+  // public async findAvailableDriversNearby(
+  //   location: { latitude: number; longitude: number },
+  //   radius: number = 5,
+  // ): Promise<any> {
+  //   try {
+  //     // ดึงข้อมูลคนขับที่มีสถานะ active โดยไม่มีเงื่อนไข current_location
+  //     const activeDrivers = await prisma.driver.findMany({
+  //       where: {
+  //         status: 'active',
+  //       },
+  //     });
 
-      // กรองคนขับที่มี current_location และคำนวณระยะทาง
-      const driversInRadius = activeDrivers
-        .filter((driver) => driver.current_location !== null)
-        .map((driver) => {
-          const driverLocation = driver.current_location as any;
-          if (
-            !driverLocation ||
-            !driverLocation.latitude ||
-            !driverLocation.longitude
-          )
-            return null;
+  //     // กรองคนขับที่มี current_location และคำนวณระยะทาง
+  //     const driversInRadius = activeDrivers
+  //       .filter((driver:any) => driver.current_location !== null)
+  //       .map((driver:AnyMxRecord) => {
+  //         const driverLocation = driver.current_location as any;
+  //         if (
+  //           !driverLocation ||
+  //           !driverLocation.latitude ||
+  //           !driverLocation.longitude
+  //         )
+  //           return null;
 
-          const distance = this.calculateDistance(
-            location.latitude,
-            location.longitude,
-            driverLocation.latitude,
-            driverLocation.longitude,
-          );
+  //         const distance = this.calculateDistance(
+  //           location.latitude,
+  //           location.longitude,
+  //           driverLocation.latitude,
+  //           driverLocation.longitude,
+  //         );
 
-          return {
-            ...driver,
-            distance, // ระยะทางในหน่วยกิโลเมตร
-          };
-        })
-        .filter((driver) => driver !== null && driver.distance <= radius)
-        .sort((a, b) => a!.distance - b!.distance);
+  //         return {
+  //           ...driver,
+  //           distance, // ระยะทางในหน่วยกิโลเมตร
+  //         };
+  //       })
 
-      logger.info('Found available drivers nearby', {
-        location,
-        radius,
-        driversCount: driversInRadius.length,
-      });
 
-      return driversInRadius;
-    } catch (error) {
-      logger.error('Error finding available drivers nearby', error);
-      throw error;
-    }
-  }
+  //     logger.info('Found available drivers nearby', {
+  //       location,
+  //       radius,
+  //       driversCount: driversInRadius.length,
+  //     });
 
-  /**
-   * คำนวณระยะทางระหว่างสองจุด (Haversine formula)
-   */
-  private calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ): number {
-    const R = 6371; // รัศมีของโลกในหน่วยกิโลเมตร
-    const dLat = this.degToRad(lat2 - lat1);
-    const dLon = this.degToRad(lon2 - lon1);
+  //     return driversInRadius;
+  //   } catch (error) {
+  //     logger.error('Error finding available drivers nearby', error);
+  //     throw error;
+  //   }
+  // }
 
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.degToRad(lat1)) *
-        Math.cos(this.degToRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+  // /**
+  //  * คำนวณระยะทางระหว่างสองจุด (Haversine formula)
+  //  */
+  // private calculateDistance(
+  //   lat1: number,
+  //   lon1: number,
+  //   lat2: number,
+  //   lon2: number,
+  // ): number {
+  //   const R = 6371; // รัศมีของโลกในหน่วยกิโลเมตร
+  //   const dLat = this.degToRad(lat2 - lat1);
+  //   const dLon = this.degToRad(lon2 - lon1);
 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // ระยะทางในหน่วยกิโลเมตร
+  //   const a =
+  //     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+  //     Math.cos(this.degToRad(lat1)) *
+  //       Math.cos(this.degToRad(lat2)) *
+  //       Math.sin(dLon / 2) *
+  //       Math.sin(dLon / 2);
 
-    return distance;
-  }
+  //   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  //   const distance = R * c; // ระยะทางในหน่วยกิโลเมตร
 
-  /**
-   * แปลงองศาเป็นเรเดียน
-   */
-  private degToRad(deg: number): number {
-    return deg * (Math.PI / 180);
-  }
+  //   return distance;
+  // }
+
+  // /**
+  //  * แปลงองศาเป็นเรเดียน
+  //  */
+  // private degToRad(deg: number): number {
+  //   return deg * (Math.PI / 180);
+  // }
 }

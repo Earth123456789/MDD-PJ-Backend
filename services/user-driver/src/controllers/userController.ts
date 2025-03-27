@@ -66,55 +66,13 @@ export class UserController {
   }
 
   /**
-   * เข้าสู่ระบบ
-   * @route POST /api/users/login
-   */
-  public async login(req: Request, res: Response): Promise<void> {
-    try {
-      const { email, password } = req.body;
-
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!email || !password) {
-        res.status(400).json({
-          success: false,
-          message: 'Email and password are required',
-        });
-        return;
-      }
-
-      // ดำเนินการเข้าสู่ระบบ
-      const loginResult = await userService.login(email, password);
-
-      res.status(200).json({
-        success: true,
-        data: loginResult,
-      });
-    } catch (error: any) {
-      logger.error('Error during login', error);
-
-      if (error.message === 'Invalid email or password') {
-        res.status(401).json({
-          success: false,
-          message: 'Invalid email or password',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'An error occurred during login',
-      });
-    }
-  }
-
-  /**
    * ดึงข้อมูลผู้ใช้ปัจจุบัน
    * @route GET /api/users/me
    */
   public async getCurrentUser(req: Request, res: Response): Promise<void> {
     try {
       // ดึง user_id จาก middleware ตรวจสอบ token
-      const userId = (req as any).user?.userId;
+      const userId = (req as any).user?.id; // ใช้ id ตามที่อยู่ใน JWT
 
       if (!userId) {
         res.status(401).json({
@@ -156,8 +114,8 @@ export class UserController {
     try {
       const { id } = req.params;
 
-      // ดึงข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const user = await userService.getUserById(parseInt(id));
+      // ดึงข้อมูลผู้ใช้ โดยใช้ id เป็น string
+      const user = await userService.getUserById(id);
 
       if (!user) {
         res.status(404).json({
@@ -204,11 +162,8 @@ export class UserController {
       if (phone) updateData.phone = phone;
       if (email) updateData.email = email;
 
-      // อัพเดทข้อมูลผู้ใช้ โดยแปลง id จาก string เป็น number
-      const updatedUser = await userService.updateUser(
-        parseInt(id),
-        updateData,
-      );
+      // อัพเดทข้อมูลผู้ใช้ โดยใช้ id เป็น string
+      const updatedUser = await userService.updateUser(id, updateData);
 
       res.status(200).json({
         success: true,
@@ -258,9 +213,9 @@ export class UserController {
         return;
       }
 
-      // เปลี่ยนรหัสผ่าน โดยแปลง id จาก string เป็น number
+      // เปลี่ยนรหัสผ่าน โดยใช้ id เป็น string
       const result = await userService.changePassword(
-        parseInt(id),
+        id,
         current_password,
         new_password,
       );
@@ -303,8 +258,8 @@ export class UserController {
     try {
       const { id } = req.params;
 
-      // ลบผู้ใช้ โดยแปลง id จาก string เป็น number
-      await userService.deleteUser(parseInt(id));
+      // ลบผู้ใช้ โดยใช้ id เป็น string
+      await userService.deleteUser(id);
 
       res.status(200).json({
         success: true,

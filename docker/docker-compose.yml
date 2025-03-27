@@ -1,4 +1,3 @@
-version: "3.8"
 name: shopdee-backend
 
 networks:
@@ -162,9 +161,9 @@ services:
       - rabbitmq
       - redis
     env_file:
-      - ./tracking-service/.env
+      - ../services/tracking/.env
     volumes:
-      - ./tracking-service:/app
+      - ./tracking:/app
     networks:
       - traefik
     labels:

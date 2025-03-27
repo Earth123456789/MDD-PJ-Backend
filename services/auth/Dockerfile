@@ -1,33 +1,24 @@
-FROM node:18-alpine
+# Base image
+FROM node:18
 
-# Install system dependencies for Alpine
-RUN apk add --no-cache \
-    openssl \
-    build-base \
-    python3 \
-    make \
-    g++ \
-    libc6-compat
-
+# Working directory
 WORKDIR /app
 
-# Copy package files first for caching
+# Copy package files and install dependencies
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies using npm ci for a clean install
-RUN npm ci
-
-# Copy Prisma files and generate client
-COPY prisma ./prisma
-RUN npx prisma generate
-
-# Copy the rest of the application source code
+# Copy the rest of the code
 COPY . .
 
-# Build the application
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build TypeScript
 RUN npm run build
 
+# Expose port (เปลี่ยนให้ตรงกับแต่ละ service เช่น 5001 หรือ 3001)
 EXPOSE 5001
 
-# Ensure RabbitMQ is available before starting the app
-CMD ["sh", "-c", "npm start"]
+# Run migration และ start app
+CMD sh -c "npx prisma migrate deploy && npm run start"

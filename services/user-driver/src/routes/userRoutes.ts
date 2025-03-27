@@ -51,37 +51,7 @@ const userController = new UserController();
  */
 router.post('/register', userController.registerUser);
 
-/**
- * @swagger
- * /users/login:
- *   post:
- *     summary: User login
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *     responses:
- *       200:
- *         description: Login successful
- *       401:
- *         description: Invalid email or password
- *       500:
- *         description: Server error
- */
-router.post('/login', userController.login);
+
 
 /**
  * @swagger

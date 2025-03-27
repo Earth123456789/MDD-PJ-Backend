@@ -53,6 +53,7 @@ const handleUserRegistered = async (data: any): Promise<void> => {
 
     await prisma.user.create({
       data: {
+        id,
         email,
         password: '', // ยังไม่ต้องใส่ password จาก auth service
         full_name: '',

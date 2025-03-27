@@ -26,7 +26,7 @@ export class JwtAuthGuard implements CanActivate {
       if (!secret) {
         throw new Error('JWT_SECRET is not defined in environment variables');
       }
-
+      
       const decoded = jwt.verify(token, secret);
 
       request.user = decoded; // แนบ user ไว้ใน req.user

@@ -1,5 +1,3 @@
-// user-driver-service/src/services/userService.ts
-
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { publishMessage } from '../config/rabbitmq';
@@ -79,59 +77,9 @@ export class UserService {
   }
 
   /**
-   * เข้าสู่ระบบ
-   */
-  public async login(email: string, password: string): Promise<any> {
-    try {
-      // ค้นหาผู้ใช้ตามอีเมล
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        throw new Error('Invalid email or password');
-      }
-
-      // ตรวจสอบรหัสผ่าน
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-
-      if (!isPasswordValid) {
-        throw new Error('Invalid email or password');
-      }
-
-      // สร้าง JWT token
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-        },
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '24h' },
-      );
-
-      // ตัดข้อมูลรหัสผ่านออกก่อนส่งกลับ
-      const { password: _, ...userWithoutPassword } = user;
-
-      logger.info('User logged in', {
-        userId: user.id,
-        email: user.email,
-      });
-
-      return {
-        user: userWithoutPassword,
-        token,
-      };
-    } catch (error) {
-      logger.error('Error during login', error);
-      throw error;
-    }
-  }
-
-  /**
    * ดึงข้อมูลผู้ใช้ตาม ID
    */
-  public async getUserById(userId: number): Promise<any> {
+  public async getUserById(userId: string): Promise<any> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -154,7 +102,7 @@ export class UserService {
   /**
    * อัพเดทข้อมูลผู้ใช้
    */
-  public async updateUser(userId: number, data: UserUpdateInput): Promise<any> {
+  public async updateUser(userId: string, data: UserUpdateInput): Promise<any> {
     try {
       // ตรวจสอบว่ามีผู้ใช้อยู่ในระบบหรือไม่
       const existingUser = await prisma.user.findUnique({
@@ -201,7 +149,7 @@ export class UserService {
    * เปลี่ยนรหัสผ่าน
    */
   public async changePassword(
-    userId: number,
+    userId: string, // เปลี่ยน userId เป็น string
     currentPassword: string,
     newPassword: string,
   ): Promise<boolean> {
@@ -246,7 +194,7 @@ export class UserService {
   /**
    * ลบผู้ใช้
    */
-  public async deleteUser(userId: number): Promise<boolean> {
+  public async deleteUser(userId: string): Promise<boolean> {
     try {
       await prisma.user.delete({
         where: { id: userId },
@@ -290,7 +238,7 @@ export class UserService {
       }
 
       // ค้นหาผู้ใช้และนับจำนวนทั้งหมด
-      const [users, totalCount] = await Promise.all([
+      const [users, totalCount] = await Promise.all([ 
         prisma.user.findMany({
           where,
           select: {

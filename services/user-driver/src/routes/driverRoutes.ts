@@ -407,6 +407,6 @@ router.get('/', driverController.searchDrivers);
  *       500:
  *         description: Server error
  */
-router.get('/nearby', driverController.findNearbyDrivers);
+// router.get('/nearby', driverController.findNearbyDrivers);
 
 export default router;
