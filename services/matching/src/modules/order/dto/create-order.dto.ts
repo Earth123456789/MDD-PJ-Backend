@@ -8,6 +8,7 @@ import {
   ValidateNested,
   IsEnum,
   IsString,
+  IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
@@ -80,6 +81,12 @@ export class CreateOrderDto {
   package_weight_kg: number;
 
   @ApiProperty({
+    description: 'Package weight in kilograms',
+    example: 50,
+  })
+
+
+  @ApiProperty({
     description: 'Package volume in cubic meters',
     example: 2.5,
   })
@@ -120,4 +127,13 @@ export class CreateOrderDto {
   @IsEnum(OrderStatus)
   @IsOptional()
   status?: OrderStatus;
+
+  @ApiProperty({
+    description: 'Price of the order in the specified currency',
+    example: 1500,
+  })
+  @IsInt()
+  @IsPositive()
+  price: number;
+  
 }

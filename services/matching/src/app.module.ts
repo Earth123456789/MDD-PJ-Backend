@@ -9,8 +9,9 @@ import { MatchingModule } from './modules/matching/matching.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
 
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AuthMiddleware } from './guards/auth.middleware';
+// MiddlewareConsumer
+import { Module, NestModule } from '@nestjs/common';
+// import { AuthMiddleware } from './guards/auth.middleware';
 
 @Module({
   imports: [
@@ -42,8 +43,9 @@ import { AuthMiddleware } from './guards/auth.middleware';
   controllers: [],
   providers: [],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AuthMiddleware).forRoutes('order', 'vehicle', 'matching'); // 🔒 Protect ทุก route ที่ขึ้นต้นด้วย /order
-  }
+export class AppModule {
+// implements NestModule
+  // configure(consumer: MiddlewareConsumer) {
+  //   consumer.apply(AuthMiddleware).forRoutes('order', 'vehicle', 'matching'); // 🔒 Protect ทุก route ที่ขึ้นต้นด้วย /order
+  // }
 }

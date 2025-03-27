@@ -19,16 +19,16 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
-  ApiBearerAuth,
+  // ApiBearerAuth,
 } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+// import { UseGuards } from '@nestjs/common';
+// import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
-@UseGuards(JwtAuthGuard)
+// @UseGuards(JwtAuthGuard)
 @ApiTags('orders')
 @Controller('orders')
-@ApiBearerAuth('JWT-auth')
+// @ApiBearerAuth('JWT-auth')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 

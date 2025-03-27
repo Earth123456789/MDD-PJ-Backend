@@ -20,13 +20,13 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiBearerAuth,
+  // ApiBearerAuth,
 } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
 
 @ApiTags('matching')
 @Controller('matching')
-@ApiBearerAuth('JWT-auth')
+// @ApiBearerAuth('JWT-auth')
 export class MatchingController {
   private readonly logger = new Logger(MatchingController.name);
 

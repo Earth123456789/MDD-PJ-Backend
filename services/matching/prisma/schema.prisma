@@ -46,12 +46,14 @@ model Order {
   package_length_m  Float
   package_width_m   Float
   package_height_m  Float
+  price     Float 
   status           OrderStatus @default(PENDING)
   vehicle_matched  Int?
   vehicle          Vehicle?    @relation(fields: [vehicle_matched], references: [id])
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
-  
+
+
   // Relations
   matchingScores   MatchingScore[]
   matchingAttempts MatchingAttempt[]

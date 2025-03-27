@@ -30,7 +30,23 @@ async function bootstrap() {
   );
 
   // Enable CORS
-  app.enableCors();
+  app.enableCors({
+    origin: [
+      'http://localhost:3000', 
+      'http://localhost',      
+      'http://127.0.0.1:3000', 
+      /^http:\/\/localhost(:\d+)?$/, 
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With', 
+      'Accept', 
+      'Origin'
+    ],
+    credentials: true,
+  });
 
   // Enable validation pipes
   app.useGlobalPipes(
@@ -56,15 +72,15 @@ async function bootstrap() {
     .addTag('matching')
     .addTag('WebSockets')
     .addTag('WebSocket Documentation')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT token',
-      },
-      'JWT-auth',
-    )
+    // .addBearerAuth(
+    //   {
+    //     type: 'http',
+    //     scheme: 'bearer',
+    //     bearerFormat: 'JWT',
+    //     description: 'Enter JWT token',
+    //   },
+    //   'JWT-auth',
+    // )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

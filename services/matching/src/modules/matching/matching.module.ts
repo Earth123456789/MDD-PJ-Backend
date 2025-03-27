@@ -8,7 +8,7 @@ import { QueueService } from 'src/queue/queue.service';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { UserDriverValidationService } from 'src/user-driver-validation.service';
 import { HttpModule } from '@nestjs/axios';
-import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+// import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -21,7 +21,7 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
     QueueService,
     WebsocketGateway,
     UserDriverValidationService,
-    JwtAuthGuard,
+    // JwtAuthGuard,
   ],
   exports: [MatchingService],
 })

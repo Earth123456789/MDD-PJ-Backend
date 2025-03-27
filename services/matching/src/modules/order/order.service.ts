@@ -62,21 +62,19 @@ export class OrderService {
 
       // Convert DTO to Prisma-compatible format with guaranteed status value
       const orderData: Prisma.OrderCreateInput = {
-        // Map scalar fields directly
         user_id: createOrderDto.user_id,
         package_weight_kg: createOrderDto.package_weight_kg,
         package_volume_m3: createOrderDto.package_volume_m3,
         package_length_m: createOrderDto.package_length_m,
         package_width_m: createOrderDto.package_width_m,
         package_height_m: createOrderDto.package_height_m,
-        status: createOrderDto.status || OrderStatus.PENDING, // Ensure status is always defined
-
-        // Convert LocationDto objects to JSON
-        pickup_location:
-          createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
-        dropoff_location:
-          createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
+        status: createOrderDto.status || OrderStatus.PENDING,
+        price: createOrderDto.price, 
+      
+        pickup_location: createOrderDto.pickup_location as unknown as Prisma.InputJsonValue,
+        dropoff_location: createOrderDto.dropoff_location as unknown as Prisma.InputJsonValue,
       };
+      
 
       // Create the order in the database
       const order = await this.prisma.order.create({
