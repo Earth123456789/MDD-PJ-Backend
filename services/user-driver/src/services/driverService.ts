@@ -45,7 +45,7 @@ export class DriverService {
    */
   public async createDriver(data: DriverCreateInput): Promise<any> {
     try {
-      // ตรวจสอบว่ามีผู้ใช้อยู่ในระบบหรือไม่
+      // ค้นหาผู้ใช้จาก user_id
       const user = await prisma.user.findUnique({
         where: { id: data.user_id },
       });
@@ -54,13 +54,17 @@ export class DriverService {
         throw new Error('User not found');
       }
 
-      // ตรวจสอบว่าผู้ใช้มีบทบาทเป็นคนขับหรือไม่
-      if (user.role !== 'driver') {
-        throw new Error('User must have driver role');
+      // ถ้าผู้ใช้เป็น customer ให้อัพเดต role เป็น driver
+      if (user.role === 'customer') {
+        await prisma.user.update({
+          where: { id: data.user_id },
+          data: { role: 'driver' },
+        });
+      } else if (user.role !== 'driver') {
+        throw new Error('User must have driver or customer role');
       }
 
-      // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
-      // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
+      // ตรวจสอบว่าผู้ใช้มีโปรไฟล์ driver อยู่แล้วหรือไม่
       const existingDriver = await prisma.driver.findUnique({
         where: { user_id: data.user_id },
       });
@@ -72,12 +76,12 @@ export class DriverService {
       // สร้างข้อมูลคนขับใหม่
       const newDriver = await prisma.driver.create({
         data: {
-          user_id: data.user_id, // ใช้ user_id ที่เป็น string ตามที่กำหนดใน Prisma schema
+          user_id: data.user_id,
           license_number: data.license_number,
           id_card_number: data.id_card_number,
-          current_location: data.current_location || undefined, // ตรวจสอบกรณีที่ไม่มี current_location
-          status: 'inactive', // เริ่มต้นเป็น inactive รอการตรวจสอบ
-          rating: 0, // เริ่มต้นด้วยคะแนน 0
+          current_location: data.current_location || undefined,
+          status: 'inactive',
+          rating: 0,
         },
       });
 
@@ -189,16 +193,16 @@ export class DriverService {
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
       });
-  
+
       if (!driver) {
         return null;
       }
-  
+
       // ไม่ต้องแปลง user_id แล้ว
-      const userId = driver.user_id;  // ใช้ user_id ตรงๆ
-  
+      const userId = driver.user_id; // ใช้ user_id ตรงๆ
+
       const userData = await userService.getUserById(userId);
-  
+
       return {
         ...driver,
         user: userData,
@@ -208,7 +212,6 @@ export class DriverService {
       throw error;
     }
   }
-  
 
   /**
    * อัพเดทสถานะคนขับ
@@ -443,7 +446,7 @@ export class DriverService {
 
       // ดึงข้อมูลผู้ใช้สำหรับคนขับที่พบ
       const driverWithUserData = await Promise.all(
-        drivers.map(async (driver:any) => {
+        drivers.map(async (driver: any) => {
           // ไม่ต้องแปลง user_id เป็น number แล้ว
           const userData = await userService.getUserById(driver.user_id);
           return {
@@ -452,7 +455,6 @@ export class DriverService {
           };
         }),
       );
-      
 
       const totalPages = Math.ceil(totalCount / limit);
 
@@ -563,7 +565,6 @@ export class DriverService {
   //           distance, // ระยะทางในหน่วยกิโลเมตร
   //         };
   //       })
-
 
   //     logger.info('Found available drivers nearby', {
   //       location,
