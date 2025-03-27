@@ -37,9 +37,9 @@ enum VehicleType {
 }
 
 model Order {
-  id Int @id @default(autoincrement())
+  id String @id @default(uuid())
 
-  user_id           Int
+  user_id           String
   pickup_location   Json
   dropoff_location  Json
   package_weight_kg Float
@@ -49,8 +49,8 @@ model Order {
   package_height_m  Float
   price             Float
   status            OrderStatus @default(PENDING)
-  vehicle_matched   Int?
-  vehicle_id        Int
+  vehicle_matched   String?
+  vehicle_id        String
   vehicle           Vehicle     @relation(fields: [vehicle_id], references: [id])
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -61,8 +61,8 @@ model Order {
 }
 
 model Vehicle {
-  id        Int @id @default(autoincrement())
-  driver_id Int
+  id        String @id @default(uuid())
+  driver_id String
 
   vehicle_type  VehicleType
   max_weight_kg Float
@@ -81,9 +81,9 @@ model Vehicle {
 }
 
 model MatchingScore {
-  id              Int      @id @default(autoincrement())
-  order_id        Int
-  vehicle_id      Int
+  id              String   @id @default(uuid())
+  order_id        String
+  vehicle_id      String
   weight_score    Float
   volume_score    Float
   dimension_score Float
@@ -96,9 +96,9 @@ model MatchingScore {
 }
 
 model MatchingAttempt {
-  id             Int      @id @default(autoincrement())
-  order_id       Int
-  vehicle_id     Int
+  id             String   @id @default(uuid())
+  order_id       String
+  vehicle_id     String
   algorithm_used String
   score          Float
   status         String

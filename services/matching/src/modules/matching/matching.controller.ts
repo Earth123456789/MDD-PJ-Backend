@@ -30,7 +30,7 @@ import { OrderStatus } from '@prisma/client';
 export class MatchingController {
   private readonly logger = new Logger(MatchingController.name);
 
-  constructor(private readonly matchingService: MatchingService) {}
+  constructor(private readonly matchingService: MatchingService) { }
 
   @Post('order/:orderId')
   @ApiOperation({
@@ -253,18 +253,60 @@ export class MatchingController {
     }
   }
 
-  @Get('order/:orderId')
-  @ApiOperation({ summary: 'Get order details' })
-  @ApiParam({ name: 'orderId', description: 'The ID of the order to retrieve' })
+  @Post('order/:orderId')
+  @ApiOperation({
+    summary: 'Match a single order with the best available vehicle',
+  })
+  @ApiParam({ name: 'orderId', description: 'The ID of the order to match' })
   @ApiResponse({
     status: 200,
-    description: 'Order details retrieved successfully',
+    description: 'Order successfully matched with a vehicle',
   })
   @ApiResponse({
     status: 404,
-    description: 'Order not found',
+    description: 'Order not found or no suitable vehicle available',
   })
-  async getOrder(@Param('orderId') orderId: string) {
+  async matchOrderWithVehicleWithPrice(@Param('orderId') orderId: string) {
+    try {
+      const matchedOrder =
+        await this.matchingService.matchOrderWithVehicle(orderId);
+
+      if (!matchedOrder) {
+        throw new HttpException(
+          'No suitable vehicle found for the order',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return {
+        success: true,
+        data: {
+          orderId: matchedOrder.id,
+          vehicleId: matchedOrder.vehicle_matched,
+          status: matchedOrder.status,
+          price: matchedOrder.price, // Include the calculated price in the response
+        },
+        message: 'Order successfully matched with a vehicle',
+      };
+    } catch (error) {
+      this.logger.error(`Error matching order ${orderId}: ${error.message}`);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'An error occurred during the matching process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('order/:orderId/price')
+  @ApiOperation({ summary: 'Get price for an order' })
+  @ApiParam({ name: 'orderId', description: 'The ID of the order' })
+  @ApiResponse({ status: 200, description: 'Order price information' })
+  async getOrderPrice(@Param('orderId') orderId: string) {
     try {
       const order = await this.matchingService.getOrderById(orderId);
 
@@ -274,20 +316,18 @@ export class MatchingController {
 
       return {
         success: true,
-        data: order,
-        message: 'Order details retrieved successfully',
+        data: {
+          order_id: order.id,
+          price: order.price,
+          vehicle_id: order.vehicle_matched,
+        },
+        message: 'Order price retrieved successfully',
       };
     } catch (error) {
-      this.logger.error(`Error retrieving order ${orderId}: ${error.message}`);
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      throw new HttpException(
-        'An error occurred while retrieving order details',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      this.logger.error(
+        `Error getting order price ${orderId}: ${error.message}`,
       );
+      throw error;
     }
   }
 
@@ -308,8 +348,8 @@ export class MatchingController {
     try {
       const orders = await this.matchingService.getAllOrders(
         status,
-        vehicleId ? parseInt(vehicleId, 10) : undefined,
-        userId ? parseInt(userId, 10) : undefined,
+        vehicleId ? parseInt(vehicleId, 10).toString() : undefined,
+        userId ? parseInt(userId, 10).toString() : undefined,
       );
 
       return {

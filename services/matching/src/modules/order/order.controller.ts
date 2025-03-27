@@ -65,8 +65,8 @@ export class OrderController {
       success: true,
       data: await this.orderService.findAll({
         status,
-        userId,
-        vehicleId,
+        userId: userId !== undefined ? String(userId) : undefined,
+        vehicleId: vehicleId !== undefined ? String(vehicleId) : undefined,
       }),
       message: 'Orders retrieved successfully',
     };
@@ -133,7 +133,7 @@ export class OrderController {
   @ApiResponse({ status: 400, description: 'Order cannot be cancelled' })
   async remove(@Param('id') id: string) {
     try {
-      await this.orderService.cancel(Number(id));
+      await this.orderService.cancel(String(id));
 
       return {
         success: true,

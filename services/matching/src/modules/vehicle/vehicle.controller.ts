@@ -31,7 +31,7 @@ import { VehicleType, VehicleStatus } from '@prisma/client';
 @Controller('vehicles')
 // @ApiBearerAuth('JWT-auth')
 export class VehicleController {
-  constructor(private readonly vehicleService: VehicleService) {}
+  constructor(private readonly vehicleService: VehicleService) { }
 
   @Post()
   @ApiOperation({ summary: 'Create a new vehicle' })
@@ -85,7 +85,7 @@ export class VehicleController {
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
   async findOne(@Param('id', ParseIntPipe) id: number) {
-    const vehicle = await this.vehicleService.findOne(id);
+    const vehicle = await this.vehicleService.findOne(id.toString());
 
     if (!vehicle) {
       throw new HttpException('Vehicle not found', HttpStatus.NOT_FOUND);
@@ -112,7 +112,7 @@ export class VehicleController {
   ) {
     try {
       const updatedVehicle = await this.vehicleService.update(
-        id,
+        id.toString(),
         updateVehicleDto,
       );
 
@@ -139,7 +139,7 @@ export class VehicleController {
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
   async remove(@Param('id', ParseIntPipe) id: number) {
     try {
-      await this.vehicleService.remove(id);
+      await this.vehicleService.remove(id.toString());
 
       return {
         success: true,
@@ -167,7 +167,10 @@ export class VehicleController {
     @Body('status') status: VehicleStatus,
   ) {
     try {
-      const updatedVehicle = await this.vehicleService.updateStatus(id, status);
+      const updatedVehicle = await this.vehicleService.updateStatus(
+        id.toString(),
+        status,
+      );
 
       return {
         success: true,
@@ -192,7 +195,7 @@ export class VehicleController {
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
   async getVehicleOrders(@Param('id', ParseIntPipe) id: number) {
     try {
-      const orders = await this.vehicleService.getVehicleOrders(id);
+      const orders = await this.vehicleService.getVehicleOrders(id.toString());
 
       return {
         success: true,

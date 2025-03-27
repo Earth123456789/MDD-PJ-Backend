@@ -14,10 +14,12 @@ import {
 } from '@prisma/client';
 import { MatchingRequestDto } from './dto/matching-request.dto';
 import { transformOrderForWebSocket } from 'src/utils/transformers';
+import { calculateFare, VehicleType } from 'src/utils/calculate-fare';
+
 
 export interface SuccessfulMatch {
   orderId: string;
-  vehicleId: number | null;
+  vehicleId: string | null;
   score: number;
   algorithm: string;
 }
@@ -32,30 +34,9 @@ export interface BatchMatchingResult {
   failed: FailedMatch[];
 }
 
-// Interface for the Knapsack problem item
-interface KnapsackItem {
-  id: number;
-  weight: number;
-  volume: number;
-  length: number;
-  width: number;
-  height: number;
-  value: number; // Priority or value of the order
-}
-
-// Interface for vehicle capacity
-interface VehicleCapacity {
-  id: number;
-  maxWeight: number;
-  maxVolume: number;
-  maxLength: number;
-  maxWidth: number;
-  maxHeight: number;
-}
-
 // Interface for matching score
 interface MatchingScore {
-  vehicleId: number;
+  vehicleId: string;
   weightScore: number;
   volumeScore: number;
   dimensionScore: number;
@@ -81,15 +62,9 @@ export class MatchingService {
     this.logger.log(`Starting matching process for order: ${orderId}`);
 
     try {
-      const orderIdNumber = parseInt(orderId, 10);
-
-      if (isNaN(orderIdNumber)) {
-        throw new Error(`Invalid order ID: ${orderId}`);
-      }
-
       // Get the order details
       const order = await this.prisma.order.findUnique({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
       });
 
       if (!order) {
@@ -145,12 +120,17 @@ export class MatchingService {
       }
 
       if (!matchedVehicle) {
-        this.logger.warn(`[MATCHING] No suitable vehicles found for order: ${orderIdNumber}`);
-        throw new HttpException('No suitable vehicle found for the order', HttpStatus.NOT_FOUND);
+        this.logger.warn(
+          `[MATCHING] No suitable vehicles found for order: ${orderId}`,
+        );
+        throw new HttpException(
+          'No suitable vehicle found for the order',
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       const updatedOrder = await this.prisma.order.update({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         data: {
           status: OrderStatus.MATCHING,
           vehicle_id: matchedVehicle.id,
@@ -162,6 +142,8 @@ export class MatchingService {
 
       // Notify about order status change via WebSocket and RabbitMQ
       this.websocketGateway.notifyOrderStatusChanged(updatedOrder);
+
+      // ส่งสถานะ MATCHING
       await this.queueService.sendToQueue('order-status-changed', {
         order_id: updatedOrder.id,
         previous_status: previousStatus,
@@ -172,28 +154,41 @@ export class MatchingService {
         dropoff_location: updatedOrder.dropoff_location,
       });
 
+      // ส่ง event การจับคู่
+      await this.queueService.sendToQueue('order-vehicle-matched', {
+        order_id: updatedOrder.id,
+        vehicle_id: updatedOrder.vehicle_id,
+        user_id: updatedOrder.user_id,
+        matched_at: new Date().toISOString(),
+      });
+
       // Find available vehicles
       // ค้นหา vehicles ที่มีสถานะ AVAILABLE
       const availableVehicles = await this.prisma.vehicle.findMany({
         where: {
-          status: 'AVAILABLE',
+          // status: 'AVAILABLE',
+          max_weight_kg: { gte: order.package_weight_kg },
+          max_volume_m3: { gte: order.package_volume_m3 },
         },
       });
 
-      this.logger.log(`[MATCHING] Found ${availableVehicles.length} candidate vehicles`);
+      this.logger.log(
+        `[MATCHING] Found ${availableVehicles.length} candidate vehicles`,
+      );
 
-      availableVehicles.forEach(v => {
-        this.logger.log(`[MATCHING] Vehicle ${v.id} volume: ${v.max_volume_m3}`);
+      availableVehicles.forEach((v) => {
+        this.logger.log(
+          `[MATCHING] Vehicle ${v.id} volume: ${v.max_volume_m3}`,
+        );
       });
 
       // เช็คถ้าไม่มีรถให้ใช้งานเลย
       if (availableVehicles.length === 0) {
         this.logger.warn(
-          `[MATCHING] No available vehicles found for order: ${orderIdNumber}`,
+          `[MATCHING] No available vehicles found for order: ${orderId}`,
         );
         return null;
       }
-
 
       // Filter suitable vehicles based on capacity constraints
       const suitableVehicles = this.filterSuitableVehicles(
@@ -203,7 +198,7 @@ export class MatchingService {
 
       if (suitableVehicles.length === 0) {
         this.logger.warn(
-          `No suitable vehicles found for order: ${orderIdNumber}`,
+          `No suitable vehicles found for order: ${orderId}`,
         );
         return null;
       }
@@ -228,7 +223,7 @@ export class MatchingService {
 
       if (validatedVehicles.length === 0) {
         this.logger.warn(
-          `No vehicles with valid drivers found for order: ${orderIdNumber}`,
+          `No vehicles with valid drivers found for order: ${orderId}`,
         );
         return null;
       }
@@ -241,18 +236,51 @@ export class MatchingService {
 
       if (!bestMatch) {
         this.logger.warn(
-          `No matching vehicle found with Knapsack algorithm for order: ${orderIdNumber}`,
+          `No matching vehicle found with Knapsack algorithm for order: ${orderId}`,
         );
         return null;
       }
 
-      // Update order with matched vehicle
+      // Get the matched vehicle details for price calculation
+      const bestVehicle = validatedVehicles.find(v => v.id === bestMatch.vehicleId);
+      if (!bestVehicle) {
+        this.logger.warn(`Could not find matched vehicle with ID ${bestMatch.vehicleId}`);
+        return null;
+      }
+
+      // Calculate distance between pickup and dropoff
+      const distanceKm = this.calculateDistance(
+        order.pickup_location,
+        order.dropoff_location
+      );
+
+      // Estimate duration based on distance
+      // Assuming average speed of 30 km/h
+      const durationMin = Math.round(distanceKm * 60 / 30);
+
+      // Calculate the price
+      const price = calculateFare({
+        vehicleType: bestVehicle.vehicle_type as VehicleType,
+        distanceKm,
+        durationMin,
+        // Default values for other parameters
+        surgeMultiplier: 1,
+        tollFees: 0,
+        otherFees: 0
+      });
+
+      this.logger.log(
+        `[PRICING] Calculated price for order ${orderId}: ${price} THB (distance: ${distanceKm.toFixed(2)} km, duration: ${durationMin} min)`,
+      );
+
+      // Update order with matched vehicle and calculated price
       const previousOrderStatus = updatedOrder.status;
       const matchedOrder = await this.prisma.order.update({
         where: { id: order.id },
         data: {
           vehicle_matched: bestMatch.vehicleId,
           status: OrderStatus.MATCHED,
+          price: price, // Update the price
         },
         include: {
           vehicle: true,
@@ -302,6 +330,7 @@ export class MatchingService {
         timestamp: new Date().toISOString(),
         pickup_location: matchedOrder.pickup_location,
         dropoff_location: matchedOrder.dropoff_location,
+        price: matchedOrder.price, // Include the calculated price
       });
 
       // Send order-status-changed message to queue
@@ -315,6 +344,7 @@ export class MatchingService {
         timestamp: new Date().toISOString(),
         pickup_location: matchedOrder.pickup_location,
         dropoff_location: matchedOrder.dropoff_location,
+        price: matchedOrder.price, // Include the calculated price
       });
 
       // Send vehicle-status-changed message to queue
@@ -328,7 +358,7 @@ export class MatchingService {
       });
 
       this.logger.log(
-        `Order ${orderIdNumber} successfully matched with vehicle ${bestMatch.vehicleId} using Knapsack algorithm (score: ${bestMatch.totalScore.toFixed(2)})`,
+        `Order ${orderId} successfully matched with vehicle ${bestMatch.vehicleId} using Knapsack algorithm (score: ${bestMatch.totalScore.toFixed(2)}, price: ${matchedOrder.price} THB)`,
       );
 
       return matchedOrder;
@@ -340,21 +370,39 @@ export class MatchingService {
     }
   }
 
+  async getOrderPriceById(orderId: string): Promise<{ fare: number; order: any } | null> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { vehicle: true },
+    });
+
+    if (!order || !order.vehicle) return null;
+
+    const distanceKm = 'distance_km' in order ? (order as any).distance_km ?? 0 : 0;
+    const durationMin = 'duration_min' in order ? order.duration_min ?? 0 : 0;
+
+    const fare = calculateFare({
+      vehicleType: order.vehicle.vehicle_type as VehicleType,
+      distanceKm,
+      durationMin: typeof durationMin === 'number' ? durationMin : 0,
+      surgeMultiplier: 'surge_multiplier' in order ? (order as any).surge_multiplier ?? 1 : 1,
+      tollFees: 'toll_fees' in order ? (order as any).toll_fees ?? 0 : 0,
+      otherFees: 'other_fees' in order ? (order as any).other_fees ?? 0 : 0,
+    });
+
+    return { fare, order };
+  }
+
+
   /**
    * Start delivery - transition from MATCHED to IN_TRANSIT
    * @param orderId - The ID of the order to start delivery for
    */
   async startDelivery(orderId: string): Promise<Order | null> {
     try {
-      const orderIdNumber = parseInt(orderId, 10);
-
-      if (isNaN(orderIdNumber)) {
-        throw new Error(`Invalid order ID: ${orderId}`);
-      }
-
       // Validate the order exists and is in MATCHED state
       const order = await this.prisma.order.findUnique({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         include: { vehicle: true },
       });
 
@@ -384,7 +432,7 @@ export class MatchingService {
       // Update order status to IN_TRANSIT
       const previousOrderStatus = order.status;
       const updatedOrder = await this.prisma.order.update({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         data: { status: OrderStatus.IN_TRANSIT },
         include: { vehicle: true },
       });
@@ -434,7 +482,7 @@ export class MatchingService {
       });
 
       this.logger.log(
-        `Order ${orderIdNumber} delivery started (status changed to IN_TRANSIT)`,
+        `Order ${orderId} delivery started (status changed to IN_TRANSIT)`,
       );
 
       return updatedOrder;
@@ -452,15 +500,9 @@ export class MatchingService {
    */
   async completeDelivery(orderId: string): Promise<Order | null> {
     try {
-      const orderIdNumber = parseInt(orderId, 10);
-
-      if (isNaN(orderIdNumber)) {
-        throw new Error(`Invalid order ID: ${orderId}`);
-      }
-
       // Validate the order exists and is in IN_TRANSIT state
       const order = await this.prisma.order.findUnique({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         include: { vehicle: true },
       });
 
@@ -490,7 +532,7 @@ export class MatchingService {
       // Update order status to DELIVERED
       const previousOrderStatus = order.status;
       const updatedOrder = await this.prisma.order.update({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         data: { status: OrderStatus.DELIVERED },
         include: { vehicle: true },
       });
@@ -530,7 +572,7 @@ export class MatchingService {
       });
 
       this.logger.log(
-        `Order ${orderIdNumber} delivery completed (status changed to DELIVERED)`,
+        `Order ${orderId} delivery completed (status changed to DELIVERED)`,
       );
 
       return updatedOrder;
@@ -548,15 +590,9 @@ export class MatchingService {
    */
   async cancelOrder(orderId: string): Promise<Order | null> {
     try {
-      const orderIdNumber = parseInt(orderId, 10);
-
-      if (isNaN(orderIdNumber)) {
-        throw new Error(`Invalid order ID: ${orderId}`);
-      }
-
       // Find the order
       const order = await this.prisma.order.findUnique({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         include: { vehicle: true },
       });
 
@@ -594,7 +630,7 @@ export class MatchingService {
 
       // Update order status to CANCELLED
       const updatedOrder = await this.prisma.order.update({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         data: { status: OrderStatus.CANCELLED },
         include: { vehicle: true },
       });
@@ -633,7 +669,7 @@ export class MatchingService {
         });
       }
 
-      this.logger.log(`Order ${orderIdNumber} cancelled`);
+      this.logger.log(`Order ${orderId} cancelled`);
 
       return updatedOrder;
     } catch (error) {
@@ -795,7 +831,7 @@ export class MatchingService {
    * Save matching score for analytics
    */
   private async saveMatchingScore(
-    orderId: number,
+    orderId: string,
     matchingScore: MatchingScore,
   ): Promise<void> {
     try {
@@ -823,8 +859,8 @@ export class MatchingService {
    * Create matching attempt record
    */
   private async createMatchingAttempt(
-    orderId: number,
-    vehicleId: number,
+    orderId: string,
+    vehicleId: string,
     score: number,
   ): Promise<void> {
     try {
@@ -851,7 +887,7 @@ export class MatchingService {
    * Update vehicle status
    */
   private async updateVehicleStatus(
-    vehicleId: number,
+    vehicleId: string,
     status: VehicleStatus,
   ): Promise<void> {
     try {
@@ -881,13 +917,7 @@ export class MatchingService {
 
     try {
       // Get all orders
-      const orderIds = dto.orderIds.map((id) => {
-        const parsedId = parseInt(id, 10);
-        if (isNaN(parsedId)) {
-          throw new Error(`Invalid order ID: ${id}`);
-        }
-        return parsedId;
-      });
+      const orderIds = dto.orderIds;
 
       const orders = await this.prisma.order.findMany({
         where: {
@@ -918,7 +948,7 @@ export class MatchingService {
             `User with ID ${order.user_id} does not exist in the user-driver service`,
           );
           results.failed.push({
-            orderId: order.id.toString(),
+            orderId: order.id,
             reason: `User with ID ${order.user_id} does not exist`,
           });
           // Remove order from the list to process
@@ -942,7 +972,7 @@ export class MatchingService {
         // If no vehicles available, mark all orders as failed
         orders.forEach((order) => {
           results.failed.push({
-            orderId: order.id.toString(),
+            orderId: order.id,
             reason: 'No vehicles available for matching',
           });
         });
@@ -971,7 +1001,7 @@ export class MatchingService {
         // If no vehicles with valid drivers, mark all orders as failed
         orders.forEach((order) => {
           results.failed.push({
-            orderId: order.id.toString(),
+            orderId: order.id,
             reason: 'No vehicles with valid drivers available for matching',
           });
         });
@@ -1011,7 +1041,7 @@ export class MatchingService {
       const assignments = this.solveMultiKnapsack(orders, validatedVehicles);
 
       // Process the assignments
-      const assignedVehicleIds = new Set<number>();
+      const assignedVehicleIds = new Set<string>();
 
       for (const order of orders) {
         const assignment = assignments.get(order.id);
@@ -1020,6 +1050,41 @@ export class MatchingService {
           const { vehicleId, score } = assignment;
           assignedVehicleIds.add(vehicleId);
 
+          // Get vehicle details for price calculation
+          const vehicle = await this.prisma.vehicle.findUnique({
+            where: { id: vehicleId }
+          });
+
+          if (!vehicle) {
+            this.logger.warn(`Cannot find vehicle with ID ${vehicleId} for price calculation`);
+            results.failed.push({
+              orderId: order.id,
+              reason: 'Vehicle not found for price calculation',
+            });
+            continue;
+          }
+
+          // Calculate distance and duration
+          const distanceKm = this.calculateDistance(
+            order.pickup_location,
+            order.dropoff_location
+          );
+          const durationMin = Math.round(distanceKm * 60 / 30); // Assuming 30 km/h average speed
+
+          // Calculate the price
+          const price = calculateFare({
+            vehicleType: vehicle.vehicle_type as VehicleType,
+            distanceKm,
+            durationMin,
+            surgeMultiplier: 1,
+            tollFees: 0,
+            otherFees: 0
+          });
+
+          this.logger.log(
+            `[PRICING] Batch matching: Calculated price for order ${order.id}: ${price} THB (distance: ${distanceKm.toFixed(2)} km, duration: ${durationMin} min)`,
+          );
+
           // Update order with matched vehicle
           const previousStatus = OrderStatus.MATCHING;
           const updatedOrder = await this.prisma.order.update({
@@ -1027,6 +1092,7 @@ export class MatchingService {
             data: {
               vehicle_matched: vehicleId,
               status: OrderStatus.MATCHED,
+              price: price, // Update with calculated price
             },
             include: { vehicle: true },
           });
@@ -1044,7 +1110,7 @@ export class MatchingService {
           });
 
           // Get vehicle information directly from the updated order
-          const vehicle = updatedOrder.vehicle;
+          const matchedVehicle = updatedOrder.vehicle;
 
           // Get driver info if vehicle exists and has a driver
           const driverInfo: any = vehicle?.driver_id
@@ -1053,7 +1119,7 @@ export class MatchingService {
 
           // Add to successful matches
           results.successful.push({
-            orderId: order.id.toString(),
+            orderId: order.id,
             vehicleId,
             score,
             algorithm: 'multi-knapsack',
@@ -1098,7 +1164,7 @@ export class MatchingService {
           });
 
           results.failed.push({
-            orderId: order.id.toString(),
+            orderId: order.id,
             reason: 'No suitable vehicle found using multi-knapsack algorithm',
           });
         }
@@ -1135,9 +1201,9 @@ export class MatchingService {
   private solveMultiKnapsack(
     orders: Order[],
     vehicles: Vehicle[],
-  ): Map<number, { vehicleId: number; score: number }> {
+  ): Map<string, { vehicleId: string; score: number }> {
     // Map to store the result: orderId -> { vehicleId, score }
-    const assignments = new Map<number, { vehicleId: number; score: number }>();
+    const assignments = new Map<string, { vehicleId: string; score: number }>();
 
     // Convert orders to KnapsackItems
     const knapsackOrders = orders.map((order) => ({
@@ -1228,14 +1294,8 @@ export class MatchingService {
    */
   async getOrderById(orderId: string): Promise<Order | null> {
     try {
-      const orderIdNumber = parseInt(orderId, 10);
-
-      if (isNaN(orderIdNumber)) {
-        throw new Error(`Invalid order ID: ${orderId}`);
-      }
-
       const order = await this.prisma.order.findUnique({
-        where: { id: orderIdNumber },
+        where: { id: orderId },
         include: { vehicle: true },
       });
 
@@ -1254,8 +1314,8 @@ export class MatchingService {
    */
   async getAllOrders(
     status?: OrderStatus,
-    vehicleId?: number,
-    userId?: number,
+    vehicleId?: string,
+    userId?: string,
   ): Promise<Order[]> {
     try {
       const where: Prisma.OrderWhereInput = {};

@@ -19,7 +19,7 @@ export class UpdateVehicleDto extends PartialType(CreateVehicleDto) {
   @IsInt()
   @IsPositive()
   @IsOptional()
-  driver_id?: number;
+  driver_id?: string;
 
   @ApiProperty({
     description: 'Vehicle type',

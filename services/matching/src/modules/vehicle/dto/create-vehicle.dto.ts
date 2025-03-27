@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEnum,
-  IsInt,
   IsNumber,
   IsPositive,
   IsOptional,
+  IsString,
   Min,
 } from 'class-validator';
 import { VehicleType, VehicleStatus } from '@prisma/client';
@@ -12,11 +12,10 @@ import { VehicleType, VehicleStatus } from '@prisma/client';
 export class CreateVehicleDto {
   @ApiProperty({
     description: 'Driver ID',
-    example: 1001,
+    example: '1001', // Changed to string example
   })
-  @IsInt()
-  @IsPositive()
-  driver_id: number;
+  @IsString() // Changed from IsInt to IsString
+  driver_id: string;
 
   @ApiProperty({
     description: 'Vehicle type',
@@ -30,7 +29,7 @@ export class CreateVehicleDto {
     description: 'Maximum weight capacity in kilograms',
     example: 2000,
   })
-  @IsInt()
+  @IsNumber()
   @IsPositive()
   max_weight_kg: number;
 

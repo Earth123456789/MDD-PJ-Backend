@@ -22,6 +22,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     'order-status-changed',
     'vehicle-status-changed',
     'vehicle-location-updated',
+    'order-vehicle-matched', // ✅ เพิ่มตรงนี้
   ];
 
   constructor(
@@ -89,28 +90,32 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
 
   private async setupConsumers() {
     // Consumer for "order-created" queue
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     await this.channel.consume('order-created', async (msg) => {
       if (msg) {
         try {
-          const content = JSON.parse(msg.content.toString());
+          const raw = msg.content.toString();
+          this.logger.debug(`📦 Raw message content: ${raw}`);
+
+          const content = JSON.parse(raw);
           this.logger.log(
-            `Received order-created message: ${JSON.stringify(content)}`,
+            `✅ Received order-created: ${JSON.stringify(content)}`,
           );
-          // Emit event for the application to handle
+
           this.eventEmitter.emit('order.created', content);
-          // Acknowledge the message
           this.channel.ack(msg);
         } catch (error) {
           this.logger.error(
-            `Error processing order-created message: ${error.message}`,
+            `❌ Failed to process message: ${msg.content.toString()}`,
           );
-          // Reject the message and requeue it
-          this.channel.nack(msg, false, true);
+          this.logger.error(`Error: ${error.message}`);
+          this.channel.nack(msg, false, false); // ❌ Don't requeue invalid
         }
       }
     });
 
     // Consumer for "vehicle-location-updated" queue
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     await this.channel.consume('vehicle-location-updated', async (msg) => {
       if (msg) {
         try {

@@ -10,8 +10,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserDriverValidationService } from 'src/user-driver-validation.service';
 
 interface DriverWithDistance {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   license_number: string;
   id_card_number: string;
   current_location?: {
@@ -24,7 +24,7 @@ interface DriverWithDistance {
   updated_at: string;
   distance?: number;
   user?: {
-    id: number;
+    id: string;
     email: string;
     full_name: string;
     phone: string;
@@ -48,26 +48,30 @@ export class VehicleService {
       `Creating new vehicle: ${JSON.stringify(createVehicleDto)}`,
     );
 
+    // Ensure driver_id is a string
+    const driverId = String(createVehicleDto.driver_id);
+
     const driverExists = await this.userDriverValidation.validateDriver(
-      createVehicleDto.driver_id,
+      driverId,
     );
 
     if (!driverExists) {
       this.logger.warn(
-        `Driver with ID ${createVehicleDto.driver_id} does not exist in the user-driver service`,
+        `Driver with ID ${driverId} does not exist in the user-driver service`,
       );
       throw new HttpException(
-        `Driver with ID ${createVehicleDto.driver_id} does not exist`,
+        `Driver with ID ${driverId} does not exist`,
         HttpStatus.BAD_REQUEST,
       );
     }
 
     const driverInfo: any = await this.userDriverValidation.getDriverInfo(
-      createVehicleDto.driver_id,
+      driverId,
     );
 
     const vehicleData = {
       ...createVehicleDto,
+      driver_id: driverId, // Ensure driver_id is a string
       status: createVehicleDto.status || VehicleStatus.AVAILABLE,
     };
 
@@ -133,14 +137,14 @@ export class VehicleService {
     });
   }
 
-  async findOne(id: number): Promise<Vehicle | null> {
+  async findOne(id: string): Promise<Vehicle | null> {
     return this.prisma.vehicle.findUnique({
       where: { id },
     });
   }
 
   async update(
-    id: number,
+    id: string,
     updateVehicleDto: UpdateVehicleDto,
   ): Promise<Vehicle> {
     // Check if vehicle exists
@@ -153,21 +157,28 @@ export class VehicleService {
     // If changing driver_id, validate that the new driver exists
     if (
       updateVehicleDto.driver_id !== undefined &&
-      updateVehicleDto.driver_id !== vehicle.driver_id
+      updateVehicleDto.driver_id !== undefined &&
+      String(updateVehicleDto.driver_id) !== vehicle.driver_id
     ) {
+      // Ensure driver_id is a string
+      const driverId = String(updateVehicleDto.driver_id);
+      
       const driverExists = await this.userDriverValidation.validateDriver(
-        updateVehicleDto.driver_id,
+        driverId,
       );
 
       if (!driverExists) {
         this.logger.warn(
-          `Driver with ID ${updateVehicleDto.driver_id} does not exist in the user-driver service`,
+          `Driver with ID ${driverId} does not exist in the user-driver service`,
         );
         throw new HttpException(
-          `Driver with ID ${updateVehicleDto.driver_id} does not exist`,
+          `Driver with ID ${driverId} does not exist`,
           HttpStatus.BAD_REQUEST,
         );
       }
+      
+      // Update the DTO with the string driver_id
+      updateVehicleDto.driver_id = driverId;
     }
 
     this.logger.log(
@@ -175,7 +186,12 @@ export class VehicleService {
     );
 
     // Create update data object, ensuring status is not undefined
-    const updateData = { ...updateVehicleDto };
+    const updateData = {
+      ...updateVehicleDto,
+      driver_id: updateVehicleDto.driver_id
+        ? String(updateVehicleDto.driver_id)
+        : undefined,
+    };
     if (updateData.status === undefined) {
       delete updateData.status; // Remove status if undefined to avoid type error
     }
@@ -212,7 +228,7 @@ export class VehicleService {
     return updatedVehicle;
   }
 
-  async updateStatus(id: number, status: VehicleStatus): Promise<Vehicle> {
+  async updateStatus(id: string, status: VehicleStatus): Promise<Vehicle> {
     // Check if vehicle exists
     const vehicle = await this.findOne(id);
 
@@ -263,7 +279,7 @@ export class VehicleService {
     return updatedVehicle;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: string): Promise<void> {
     // Check if vehicle exists
     const vehicle = await this.findOne(id);
 
@@ -314,7 +330,7 @@ export class VehicleService {
     });
   }
 
-  async getVehicleOrders(id: number): Promise<Order[]> {
+  async getVehicleOrders(id: string): Promise<Order[]> {
     // Check if vehicle exists
     const vehicle = await this.findOne(id);
 
@@ -396,10 +412,10 @@ export class VehicleService {
       }
 
       // Find nearby drivers from user-driver service
-      const nearbyDrivers = (await this.userDriverValidation.findNearbyDrivers(
+      const nearbyDrivers = await this.userDriverValidation.findNearbyDrivers(
         location,
         radius,
-      )) as DriverWithDistance[];
+      ) as DriverWithDistance[];
 
       if (nearbyDrivers.length === 0) {
         return [];

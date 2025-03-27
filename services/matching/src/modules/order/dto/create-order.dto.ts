@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsInt,
   IsNumber,
   IsPositive,
   IsOptional,
@@ -48,11 +47,11 @@ class LocationDto {
 export class CreateOrderDto {
   @ApiProperty({
     description: 'User ID',
-    example: 1001,
+    example: 'e1297edf-cfbe-4f96-be4d-78004a2f2df8',
   })
-  @IsInt()
-  @IsPositive()
-  user_id: number;
+  @IsString() // Changed from IsInt to IsString
+  @IsNotEmpty()
+  user_id: string;
 
   @ApiProperty({
     description: 'Pickup location',
@@ -76,14 +75,10 @@ export class CreateOrderDto {
     description: 'Package weight in kilograms',
     example: 50,
   })
-  @IsInt()
+  @IsNumber()
   @IsPositive()
   package_weight_kg: number;
 
-  @ApiProperty({
-    description: 'Package weight in kilograms',
-    example: 50,
-  })
   @ApiProperty({
     description: 'Package volume in cubic meters',
     example: 2.5,
@@ -127,19 +122,20 @@ export class CreateOrderDto {
   status?: OrderStatus;
 
   @ApiProperty({
-    description: 'Price of the order in the specified currency',
+    description: 'Price of the order in the specified currency. Will be calculated automatically if not provided.',
     example: 1500,
+    required: false,
   })
-  @IsInt()
+  @IsNumber()
   @IsPositive()
-  price: number;
+  @IsOptional()
+  price?: number;
 
   @ApiProperty({
     description: 'ID of the vehicle assigned to this order',
-    example: 1,
+    example: 'f7cdf6d5-9cb4-4e7d-b4f5-aa90d9c57e9a',
   })
-  @IsInt()
-  @IsPositive()
+  @IsString() // Changed from IsInt to IsString
   @IsNotEmpty()
-  vehicle_id: number;
+  vehicle_id: string;
 }
