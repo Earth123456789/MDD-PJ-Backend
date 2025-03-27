@@ -1,5 +1,3 @@
-// payment/src/payment/payment.controller.ts
-
 import {
   Controller,
   Get,
@@ -8,8 +6,6 @@ import {
   Param,
   Patch,
   Delete,
-  UseGuards,
-  ParseIntPipe,
   Query,
   NotFoundException,
   BadRequestException,
@@ -26,7 +22,6 @@ import { PaymentService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { VehicleType } from '../common/enums/vehicle-type.enum';
-import { PriceBreakdown } from '../pricing/pricing.types';
 
 @ApiTags('payments')
 @Controller('payments')
@@ -36,19 +31,12 @@ export class PaymentController {
   @Post()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new payment' })
-  @ApiResponse({
-    status: 201,
-    description: 'The payment has been successfully created.',
-  })
+  @ApiResponse({ status: 201, description: 'The payment has been successfully created.' })
   async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
     try {
-      const orderDetails = await this.paymentService.getOrderDetails(
-        createPaymentDto.order_id,
-      );
+      const orderDetails = await this.paymentService.getOrderDetails(createPaymentDto.order_id);
       if (!orderDetails) {
-        throw new NotFoundException(
-          `Order with ID ${createPaymentDto.order_id} not found in matching service`
-        );
+        throw new NotFoundException(`Order with ID ${createPaymentDto.order_id} not found in matching service`);
       }
       return this.paymentService.createPayment(createPaymentDto);
     } catch (error) {
@@ -67,24 +55,41 @@ export class PaymentController {
     return this.paymentService.findAllPayments();
   }
 
+  @Get('order/:orderId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payments by order ID' })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
+  @ApiResponse({ status: 200, description: 'Return the payments for an order.' })
+  async getPaymentsByOrderId(@Param('orderId') orderId: string) {
+    return this.paymentService.getPaymentsByOrderId(orderId);
+  }
+
+  @Get('driver/:driverId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payments by driver ID' })
+  @ApiParam({ name: 'driverId', description: 'Driver UUID', type: String })
+  @ApiResponse({ status: 200, description: 'Return the payments for a driver.' })
+  async getPaymentsByDriverId(@Param('driverId') driverId: string) {
+    return this.paymentService.getPaymentsByDriverId(driverId);
+  }
+
   @Get(':id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get payment by ID' })
+  @ApiParam({ name: 'id', description: 'Payment UUID', type: String })
   @ApiResponse({ status: 200, description: 'Return the payment.' })
   @ApiResponse({ status: 404, description: 'Payment not found.' })
-  async getPayment(@Param('id', ParseIntPipe) id: number) {
+  async getPayment(@Param('id') id: string) {
     return this.paymentService.getPaymentById(id);
   }
 
   @Patch(':id/status')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update payment status' })
-  @ApiResponse({
-    status: 200,
-    description: 'The payment status has been successfully updated.',
-  })
+  @ApiParam({ name: 'id', description: 'Payment UUID', type: String })
+  @ApiResponse({ status: 200, description: 'The payment status has been successfully updated.' })
   async updatePaymentStatus(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() updateStatusDto: UpdatePaymentStatusDto,
   ) {
     return this.paymentService.updatePaymentStatus(id, updateStatusDto);
@@ -93,70 +98,41 @@ export class PaymentController {
   @Delete(':id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a payment by ID' })
+  @ApiParam({ name: 'id', description: 'Payment UUID', type: String })
   @ApiResponse({ status: 200, description: 'Payment deleted successfully.' })
-  async deletePayment(@Param('id', ParseIntPipe) id: number) {
+  async deletePayment(@Param('id') id: string) {
     return this.paymentService.deletePayment(id);
   }
 
   @Post(':id/process')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Process a payment' })
-  @ApiResponse({
-    status: 200,
-    description: 'The payment has been successfully processed.',
-  })
-  async processPayment(@Param('id', ParseIntPipe) id: number) {
+  @ApiParam({ name: 'id', description: 'Payment UUID', type: String })
+  @ApiResponse({ status: 200, description: 'The payment has been successfully processed.' })
+  async processPayment(@Param('id') id: string) {
     return this.paymentService.processPayment(id);
   }
 
   @Get('calculate/:orderId')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Calculate price for an order' })
-  @ApiParam({ name: 'orderId', description: 'Order ID to calculate price for' })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', type: String })
   @ApiQuery({
     name: 'vehicleType',
     enum: VehicleType,
     description: 'Type of vehicle to use for delivery',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Price calculation details',
-  })
+  @ApiResponse({ status: 200, description: 'Price calculation details' })
   async calculatePrice(
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param('orderId') orderId: string,
     @Query('vehicleType') vehicleType: VehicleType,
   ) {
-    const priceDetails = await this.paymentService.calculateOrderPrice(
-      orderId,
-      vehicleType,
-    );
+    const priceDetails = await this.paymentService.calculateOrderPrice(orderId, vehicleType);
     return {
       success: true,
       data: priceDetails,
       message: 'Price calculated successfully',
     };
-  }
-
-  @Get('order/:orderId')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get payments by order ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Return the payments for an order.',
-  })
-  async getPaymentsByOrderId(@Param('orderId', ParseIntPipe) orderId: number) {
-    return this.paymentService.getPaymentsByOrderId(orderId);
-  }
-
-  @Get('driver/:driverId')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get payments by driver ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Return the payments for a driver.',
-  })
-  async getPaymentsByDriverId(@Param('driverId', ParseIntPipe) driverId: number) {
-    return this.paymentService.getPaymentsByDriverId(driverId);
   }
 
   @Get('estimate')
@@ -176,12 +152,12 @@ export class PaymentController {
     @Query('endLng') endLng: number,
   ): Promise<any> {
     const R = 6371;
-    const dLat = this.deg2rad(Number(endLat) - Number(startLat));
-    const dLon = this.deg2rad(Number(endLng) - Number(startLng));
+    const dLat = this.deg2rad(endLat - startLat);
+    const dLon = this.deg2rad(endLng - startLng);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.deg2rad(Number(startLat))) *
-        Math.cos(this.deg2rad(Number(endLat))) *
+      Math.cos(this.deg2rad(startLat)) *
+        Math.cos(this.deg2rad(endLat)) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distanceKm = parseFloat((R * c).toFixed(2));

@@ -46,7 +46,7 @@ export class QrCodeService {
    * @param driverId Driver ID to check
    * @returns Boolean indicating if driver exists
    */
-  private async isValidDriverId(driverId: number): Promise<boolean> {
+  private async isValidDriverId(driverId: string): Promise<boolean> {
     const drivers = await this.getAllDrivers();
     return drivers.some(driver => driver.id === driverId);
   }
@@ -56,7 +56,7 @@ export class QrCodeService {
    * @param driverId The driver ID
    * @returns The driver details or null
    */
-  async getDriverDetails(driverId: number): Promise<any> {
+  async getDriverDetails(driverId: string): Promise<any> {
     try {
       // First, check if driver ID exists
       const isValid = await this.isValidDriverId(driverId);
@@ -96,7 +96,7 @@ export class QrCodeService {
    * @param driverId The driver ID
    * @returns The driver's phone number
    */
-  async getDriverPhoneNumber(driverId: number): Promise<string> {
+  async getDriverPhoneNumber(driverId: string): Promise<string> {
     // First, check if driver exists
     const isValid = await this.isValidDriverId(driverId);
     if (!isValid) {
@@ -135,16 +135,18 @@ export class QrCodeService {
    * Generate a PromptPay QR code for a payment
    * @param paymentId The payment ID
    * @param amount The payment amount
-   * @param driverId The driver ID
+   * @param driverId The driver ID (optional)
    * @returns The base64 encoded QR code data
    */
   async generatePromptpayQrCode(
-    paymentId: number,
+    paymentId: string,
     amount: number,
-    driverId: number,
+    driverId: string | null,
   ): Promise<string> {
     try {
-      const phoneNumber = await this.getDriverPhoneNumber(driverId);
+      const phoneNumber = driverId 
+        ? await this.getDriverPhoneNumber(driverId)
+        : this.DEFAULT_PHONE_NUMBER;
 
       const payload = generatePayload(phoneNumber, { amount });
 
@@ -168,7 +170,7 @@ export class QrCodeService {
       });
 
       this.logger.log(
-        `Generated PromptPay QR code for payment ${paymentId} to driver ${driverId}`,
+        `Generated PromptPay QR code for payment ${paymentId} to driver ${driverId || 'default'}`,
       );
       return qrCodeData;
     } catch (error) {
@@ -190,22 +192,26 @@ export class QrCodeService {
    */
   async verifyQrCodeScan(
     scanData: string,
-  ): Promise<{ valid: boolean; paymentId?: number }> {
+  ): Promise<{ valid: boolean; paymentId?: string }> {
     try {
       // For PromptPay, verification would typically be handled by a bank or payment provider
       // Since we don't have direct access to those systems, we'll simulate verification
       // In a real application, you would integrate with a payment processor or bank API
 
       // Extract payment ID from a custom field in the scan data
-      const match = scanData.match(/REF(\d+)/);
+      // Update regex to match UUIDs instead of just digits
+      const match = scanData.match(/REF([a-f0-9-]+)/i);
       if (!match || !match[1]) {
         this.logger.warn(`Invalid QR code scan data: ${scanData}`);
         return { valid: false };
       }
 
-      const paymentId = parseInt(match[1], 10);
-      if (isNaN(paymentId)) {
-        this.logger.warn(`Invalid payment ID in QR code: ${match[1]}`);
+      const paymentId = match[1];
+      
+      // Validate UUID format (basic check)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(paymentId)) {
+        this.logger.warn(`Invalid payment ID format in QR code: ${paymentId}`);
         return { valid: false };
       }
 

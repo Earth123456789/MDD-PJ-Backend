@@ -45,10 +45,10 @@ export class PaymentService {
    * @param orderId Order ID
    * @returns Order details or null
    */
-  public async getOrderDetails(orderId: number): Promise<any> {
+  public async getOrderDetails(orderId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(
+        this.httpService.get<{ data: { data: any } }>(
           `${this.vehicleMatchingServiceUrl}/matching/order/${orderId}`
         )
       );
@@ -94,15 +94,15 @@ export class PaymentService {
           amount: amount,
           payment_method: payment_method || PaymentMethod.QR_CODE,
           status: PaymentStatus.PENDING,
-          driver_id: driver_id || 0, // Ensure driver_id is a number
+          driver_id: driver_id || null, // Use null for optional string IDs
         },
       });
 
       if (payment.payment_method === PaymentMethod.QR_CODE) {
         const qrCodeUrl = await this.qrCodeService.generatePromptpayQrCode(
-          payment.id,           // paymentId (first argument)
-          payment.amount,       // amount (second argument)
-          payment.driver_id || 0 // driverId (third argument, ensure it's a number)
+          payment.id, // Use string ID directly
+          payment.amount, // amount (second argument)
+          payment.driver_id // driver_id is now a string or null
         );
 
         await this.prisma.payment.update({
@@ -185,7 +185,7 @@ export class PaymentService {
    * Get payment by ID
    * @param id Payment ID
    */
-  async getPaymentById(id: number) {
+  async getPaymentById(id: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
     });
@@ -202,7 +202,7 @@ export class PaymentService {
    * @param id Payment ID
    * @param updateStatusDto Status update details
    */
-  async updatePaymentStatus(id: number, updateStatusDto: UpdatePaymentStatusDto) {
+  async updatePaymentStatus(id: string, updateStatusDto: UpdatePaymentStatusDto) {
     try {
       const updatedPayment = await this.prisma.payment.update({
         where: { id },
@@ -232,7 +232,7 @@ export class PaymentService {
    * Delete a payment
    * @param id Payment ID
    */
-  async deletePayment(id: number) {
+  async deletePayment(id: string) {
     try {
       // First, check if payment exists
       await this.getPaymentById(id);
@@ -250,7 +250,7 @@ export class PaymentService {
    * Process a payment
    * @param id Payment ID
    */
-  async processPayment(id: number) {
+  async processPayment(id: string) {
     try {
       const payment = await this.getPaymentById(id);
 
@@ -286,7 +286,7 @@ export class PaymentService {
    * @param orderId Order ID
    * @param vehicleType Vehicle type
    */
-  async calculateOrderPrice(orderId: number, vehicleType: VehicleType): Promise<PriceBreakdown> {
+  async calculateOrderPrice(orderId: string, vehicleType: VehicleType): Promise<PriceBreakdown> {
     const orderDetails = await this.getOrderDetails(orderId);
 
     if (!orderDetails) {
@@ -310,7 +310,7 @@ export class PaymentService {
    * Get payments by order ID
    * @param orderId Order ID
    */
-  async getPaymentsByOrderId(orderId: number) {
+  async getPaymentsByOrderId(orderId: string) {
     return this.prisma.payment.findMany({
       where: { order_id: orderId },
       orderBy: { created_at: 'desc' },
@@ -321,7 +321,7 @@ export class PaymentService {
    * Get payments by driver ID
    * @param driverId Driver ID
    */
-  async getPaymentsByDriverId(driverId: number) {
+  async getPaymentsByDriverId(driverId: string) {
     return this.prisma.payment.findMany({
       where: { driver_id: driverId },
       orderBy: { created_at: 'desc' },

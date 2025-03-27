@@ -4,7 +4,7 @@ import { PaymentStatus } from '@prisma/client';
 
 export class UpdatePaymentStatusDto {
   @ApiProperty({
-    description: 'The new payment status',
+    description: 'New payment status',
     enum: PaymentStatus,
   })
   @IsEnum(PaymentStatus)

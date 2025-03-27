@@ -50,9 +50,9 @@ export class QrCodeController {
     const amountNum = parseFloat(amount);
 
     const qrCodeData = await this.qrCodeService.generatePromptpayQrCode(
-      999, // Test payment ID
+      '999', // Test payment ID
       amountNum,
-      driverIdNum,
+      driverIdNum.toString(),
     );
 
     return { qrCodeData };

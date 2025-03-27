@@ -25,15 +25,15 @@ enum PaymentMethod {
 }
 
 model Payment {
-  id             Int           @id @default(autoincrement())
-  order_id       Int
+  id             String        @id @default(uuid())
+  order_id       String
   amount         Float
   currency       String        @default("THB")
   payment_method PaymentMethod @default(QR_CODE)
   status         PaymentStatus @default(PENDING)
   qr_code_url    String?
   transaction_id String?       @unique
-  driver_id      Int?
+  driver_id      String?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
 
@@ -42,27 +42,27 @@ model Payment {
 }
 
 model PaymentTransaction {
-  id                Int       @id @default(autoincrement())
+  id                String    @id @default(uuid())
   amount            Float
   currency          String    @default("THB")
   description       String?
   transaction_type  String    // DEPOSIT, WITHDRAWAL, TRANSFER
   status            String    // PENDING, COMPLETED, FAILED
   external_ref_id   String?
-  driver_id         Int
+  driver_id         String
   promptpay_number  String?   // เก็บเบอร์โทร PromptPay แทน
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 }
 
 model PaymentLog {
-  id          Int      @id @default(autoincrement())
-  payment_id  Int
+  id          String    @id @default(uuid())
+  payment_id  String
   status      String
   message     String?
   metadata    Json?
-  created_at  DateTime @default(now())
+  created_at  DateTime  @default(now())
 
   // Relations
-  payment     Payment  @relation(fields: [payment_id], references: [id])
+  payment     Payment   @relation(fields: [payment_id], references: [id])
 }
