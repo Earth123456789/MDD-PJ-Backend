@@ -9,7 +9,6 @@ import {
   Query,
   HttpStatus,
   HttpException,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { VehicleService } from './vehicle.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -84,8 +83,8 @@ export class VehicleController {
     description: 'The vehicle has been found',
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const vehicle = await this.vehicleService.findOne(id.toString());
+  async findOne(@Param('id') id: string) {
+    const vehicle = await this.vehicleService.findOne(id);
 
     if (!vehicle) {
       throw new HttpException('Vehicle not found', HttpStatus.NOT_FOUND);
@@ -107,12 +106,12 @@ export class VehicleController {
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() updateVehicleDto: UpdateVehicleDto,
   ) {
     try {
       const updatedVehicle = await this.vehicleService.update(
-        id.toString(),
+        id,
         updateVehicleDto,
       );
 
@@ -137,9 +136,9 @@ export class VehicleController {
     description: 'The vehicle has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  async remove(@Param('id') id: string) {
     try {
-      await this.vehicleService.remove(id.toString());
+      await this.vehicleService.remove(id);
 
       return {
         success: true,
@@ -163,12 +162,12 @@ export class VehicleController {
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
   async updateStatus(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body('status') status: VehicleStatus,
   ) {
     try {
       const updatedVehicle = await this.vehicleService.updateStatus(
-        id.toString(),
+        id,
         status,
       );
 
@@ -193,9 +192,9 @@ export class VehicleController {
     description: 'List of orders assigned to the vehicle',
   })
   @ApiResponse({ status: 404, description: 'Vehicle not found' })
-  async getVehicleOrders(@Param('id', ParseIntPipe) id: number) {
+  async getVehicleOrders(@Param('id') id: string) {
     try {
-      const orders = await this.vehicleService.getVehicleOrders(id.toString());
+      const orders = await this.vehicleService.getVehicleOrders(id);
 
       return {
         success: true,

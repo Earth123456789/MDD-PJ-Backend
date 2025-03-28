@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Tracking API Test</title>
+</head>
+<body>
+    <h1>Minimal Tracking API Test</h1>
+    
+    <div>
+        <p>
+            <label for="server-url">Server URL:</label>
+            <input type="text" id="server-url" value="ws://localhost:8000/ws" style="width: 300px;">
+        </p>
+        <p>
+            <label for="entity-id">ID:</label>
+            <input type="text" id="entity-id" value="user-123">
+            
+            <input type="radio" id="user-type" name="conn-type" value="user" checked>
+            <label for="user-type">User</label>
+            
+            <input type="radio" id="driver-type" name="conn-type" value="driver">
+            <label for="driver-type">Driver</label>
+        </p>
+        <p>
+            <label for="order-id">Order ID:</label>
+            <input type="text" id="order-id" value="order-123">
+        </p>
+        <p>
+            <button id="connect-btn">Connect</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+            <span id="status">Disconnected</span>
+        </p>
+    </div>
+
+    <div>
+        <h3>Actions</h3>
+        <p>
+            <button id="send-location-btn" disabled>Send Location Update</button>
+            <button id="subscribe-btn" disabled>Subscribe to Order</button>
+            <button id="status-update-btn" disabled>Update Status to IN_TRANSIT</button>
+        </p>
+        <p>
+            <button id="clear-btn">Clear Log</button>
+        </p>
+    </div>
+
+    <div>
+        <h3>Message Log</h3>
+        <pre id="log" style="height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px;"></pre>
+    </div>
+
+    <script>
+        // Elements
+        const serverUrlInput = document.getElementById('server-url');
+        const entityIdInput = document.getElementById('entity-id');
+        const orderIdInput = document.getElementById('order-id');
+        const userTypeRadio = document.getElementById('user-type');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const statusSpan = document.getElementById('status');
+        const sendLocationBtn = document.getElementById('send-location-btn');
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const statusUpdateBtn = document.getElementById('status-update-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const logPre = document.getElementById('log');
+
+        // State
+        let socket = null;
+
+        // Log message
+        function log(message) {
+            const now = new Date().toISOString();
+            logPre.textContent = `[${now}] ${message}\n` + logPre.textContent;
+        }
+
+        // Clear log
+        clearBtn.addEventListener('click', () => {
+            logPre.textContent = '';
+        });
+
+        // Connect
+        connectBtn.addEventListener('click', () => {
+            if (socket) {
+                log('Already connected');
+                return;
+            }
+
+            const serverUrl = serverUrlInput.value;
+            const entityId = entityIdInput.value;
+            const orderId = orderIdInput.value;
+            const isUser = userTypeRadio.checked;
+
+            let wsUrl;
+            if (isUser) {
+                wsUrl = `${serverUrl}/user?token=${entityId}`;
+                if (orderId) {
+                    wsUrl += `&order_id=${orderId}`;
+                }
+            } else {
+                wsUrl = `${serverUrl}/driver?token=${entityId}`;
+            }
+
+            log(`Connecting to ${wsUrl}`);
+
+            try {
+                socket = new WebSocket(wsUrl);
+
+                socket.onopen = () => {
+                    log('Connected!');
+                    statusSpan.textContent = 'Connected';
+                    statusSpan.style.color = 'green';
+                    
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    sendLocationBtn.disabled = isUser;
+                    subscribeBtn.disabled = isUser ? false : true;
+                    statusUpdateBtn.disabled = isUser;
+                };
+
+                socket.onclose = (event) => {
+                    log(`Disconnected (${event.code})`);
+                    statusSpan.textContent = 'Disconnected';
+                    statusSpan.style.color = 'red';
+                    
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    sendLocationBtn.disabled = true;
+                    subscribeBtn.disabled = true;
+                    statusUpdateBtn.disabled = true;
+                    
+                    socket = null;
+                };
+
+                socket.onerror = (error) => {
+                    log(`Error: ${error}`);
+                };
+
+                socket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`Received: ${JSON.stringify(data, null, 2)}`);
+                        
+                        // Handle heartbeat
+                        if (data.type === 'heartbeat') {
+                            socket.send(JSON.stringify({
+                                type: 'heartbeat_response',
+                                data: { timestamp: new Date().toISOString() }
+                            }));
+                            log('Sent heartbeat response');
+                        }
+                    } catch (e) {
+                        log(`Error parsing message: ${e.message}`);
+                    }
+                };
+            } catch (e) {
+                log(`Failed to create WebSocket: ${e.message}`);
+            }
+        });
+
+        // Disconnect
+        disconnectBtn.addEventListener('click', () => {
+            if (socket) {
+                socket.close();
+            }
+        });
+
+        // Send location update (for driver)
+        sendLocationBtn.addEventListener('click', () => {
+            if (!socket) {
+                log('Not connected');
+                return;
+            }
+
+            const message = {
+                type: 'location_update',
+                data: {
+                    latitude: 13.7563 + (Math.random() - 0.5) * 0.01,
+                    longitude: 100.5018 + (Math.random() - 0.5) * 0.01,
+                    heading: Math.floor(Math.random() * 360),
+                    speed: 20 + Math.floor(Math.random() * 20),
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            socket.send(JSON.stringify(message));
+            log(`Sent location update: ${JSON.stringify(message.data)}`);
+        });
+
+        // Subscribe to order (for user)
+        subscribeBtn.addEventListener('click', () => {
+            if (!socket) {
+                log('Not connected');
+                return;
+            }
+
+            const orderId = orderIdInput.value;
+            if (!orderId) {
+                log('No order ID specified');
+                return;
+            }
+
+            const message = {
+                type: 'subscribe_order',
+                data: { order_id: orderId }
+            };
+
+            socket.send(JSON.stringify(message));
+            log(`Subscribed to order: ${orderId}`);
+        });
+
+        // Update status (for driver)
+        statusUpdateBtn.addEventListener('click', () => {
+            if (!socket) {
+                log('Not connected');
+                return;
+            }
+
+            const orderId = orderIdInput.value;
+            if (!orderId) {
+                log('No order ID specified');
+                return;
+            }
+
+            const message = {
+                type: 'order_status_update',
+                data: {
+                    order_id: orderId,
+                    status: 'IN_TRANSIT',
+                    latitude: 13.7563,
+                    longitude: 100.5018,
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            socket.send(JSON.stringify(message));
+            log(`Sent status update: ${JSON.stringify(message.data)}`);
+        });
+
+        // Initial log
+        log('Ready - click Connect to start');
+    </script>
+</body>
+</html>

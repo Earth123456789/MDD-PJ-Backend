@@ -157,7 +157,6 @@ export class VehicleService {
     // If changing driver_id, validate that the new driver exists
     if (
       updateVehicleDto.driver_id !== undefined &&
-      updateVehicleDto.driver_id !== undefined &&
       String(updateVehicleDto.driver_id) !== vehicle.driver_id
     ) {
       // Ensure driver_id is a string
