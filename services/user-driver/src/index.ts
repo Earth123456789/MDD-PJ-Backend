@@ -22,17 +22,17 @@ app.use(express.json());
 // Setup Swagger
 setupSwagger(app);
 
-// API Routes
+// API Routes - รวมให้เหลือเฉพาะ driver routes
 app.use('/api', routes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'user-driver-service' });
+  res.status(200).json({ status: 'ok', service: 'driver-service' });
 });
 
 // Start server
 const server = app.listen(port, async () => {
-  logger.info(`User & Driver Service running on port ${port}`);
+  logger.info(`Driver Service running on port ${port}`);
 
   // Connect to RabbitMQ if enabled
   if (process.env.ENABLE_RABBITMQ === 'true') {

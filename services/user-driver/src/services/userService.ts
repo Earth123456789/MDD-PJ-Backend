@@ -3,131 +3,22 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { publishMessage } from '../config/rabbitmq';
-import * as bcrypt from 'bcryptjs';
-import * as jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
-
-interface UserCreateInput {
-  email: string;
-  password: string;
-  full_name: string;
-  phone: string;
-  role: 'customer' | 'driver' | 'admin';
-}
 
 interface UserUpdateInput {
   full_name?: string;
   phone?: string;
   email?: string;
+  avatar?: string;
+}
+
+// ประกาศ interface เพื่อใช้กับผลลัพธ์จาก raw query
+interface CountResult {
+  count: number | BigInt;
 }
 
 export class UserService {
-  /**
-   * สร้างผู้ใช้ใหม่
-   */
-  public async createUser(data: UserCreateInput): Promise<any> {
-    try {
-      // ตรวจสอบว่าอีเมลมีอยู่ในระบบแล้วหรือไม่
-      const existingUser = await prisma.user.findUnique({
-        where: { email: data.email },
-      });
-
-      if (existingUser) {
-        throw new Error('Email already exists');
-      }
-
-      // เข้ารหัสรหัสผ่าน
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-
-      // สร้างผู้ใช้ใหม่
-      const newUser = await prisma.user.create({
-        data: {
-          email: data.email,
-          password: hashedPassword,
-          full_name: data.full_name,
-          phone: data.phone,
-          role: data.role as any,
-        },
-      });
-
-      // ตัดข้อมูลรหัสผ่านออกก่อนส่งกลับ
-      const { password, ...userWithoutPassword } = newUser;
-
-      // ส่งข้อความแจ้งเตือนการสร้างผู้ใช้ใหม่
-      await publishMessage('user-events', {
-        event: 'USER_REGISTERED',
-        data: {
-          userId: newUser.id,
-          email: newUser.email,
-          role: newUser.role,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      logger.info('Created new user', {
-        userId: newUser.id,
-        email: newUser.email,
-        role: newUser.role,
-      });
-
-      return userWithoutPassword;
-    } catch (error) {
-      logger.error('Error creating user', error);
-      throw error;
-    }
-  }
-
-  /**
-   * เข้าสู่ระบบ
-   */
-  public async login(email: string, password: string): Promise<any> {
-    try {
-      // ค้นหาผู้ใช้ตามอีเมล
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        throw new Error('Invalid email or password');
-      }
-
-      // ตรวจสอบรหัสผ่าน
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-
-      if (!isPasswordValid) {
-        throw new Error('Invalid email or password');
-      }
-
-      // สร้าง JWT token
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-        },
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '24h' },
-      );
-
-      // ตัดข้อมูลรหัสผ่านออกก่อนส่งกลับ
-      const { password: _, ...userWithoutPassword } = user;
-
-      logger.info('User logged in', {
-        userId: user.id,
-        email: user.email,
-      });
-
-      return {
-        user: userWithoutPassword,
-        token,
-      };
-    } catch (error) {
-      logger.error('Error during login', error);
-      throw error;
-    }
-  }
-
   /**
    * ดึงข้อมูลผู้ใช้ตาม ID
    */
@@ -144,7 +35,18 @@ export class UserService {
       // ตัดข้อมูลรหัสผ่านออกก่อนส่งกลับ
       const { password, ...userWithoutPassword } = user;
 
-      return userWithoutPassword;
+      // นับจำนวนการแจ้งเตือนที่ยังไม่อ่าน (ถ้ามีฟีเจอร์นี้)
+      const unreadNotificationsCount = await this.countUnreadNotifications(userId);
+
+      // จัดรูปแบบข้อมูลให้ตรงกับที่ frontend คาดหวัง
+      return {
+        ...userWithoutPassword,
+        data: {
+          full_name: user.full_name,
+          avatar: user.avatar,
+          notifications: unreadNotificationsCount
+        }
+      };
     } catch (error) {
       logger.error('Error fetching user by ID', error);
       throw error;
@@ -165,17 +67,6 @@ export class UserService {
         throw new Error('User not found');
       }
 
-      // ตรวจสอบอีเมลซ้ำถ้ามีการอัพเดทอีเมล
-      if (data.email && data.email !== existingUser.email) {
-        const emailExists = await prisma.user.findUnique({
-          where: { email: data.email },
-        });
-
-        if (emailExists) {
-          throw new Error('Email already exists');
-        }
-      }
-
       // อัพเดทข้อมูลผู้ใช้
       const updatedUser = await prisma.user.update({
         where: { id: userId },
@@ -185,12 +76,29 @@ export class UserService {
       // ตัดข้อมูลรหัสผ่านออกก่อนส่งกลับ
       const { password, ...userWithoutPassword } = updatedUser;
 
+      // ส่ง event แจ้งเตือนการอัพเดทข้อมูลผู้ใช้
+      await publishMessage('user_profile_events', {
+        event: 'USER_PROFILE_UPDATED',
+        data: {
+          userId,
+          updatedFields: Object.keys(data),
+          timestamp: new Date().toISOString(),
+        },
+      });
+
       logger.info('Updated user', {
         userId,
         updatedFields: Object.keys(data),
       });
 
-      return userWithoutPassword;
+      return {
+        ...userWithoutPassword,
+        data: {
+          full_name: updatedUser.full_name,
+          avatar: updatedUser.avatar,
+          notifications: await this.countUnreadNotifications(userId)
+        }
+      };
     } catch (error) {
       logger.error('Error updating user', error);
       throw error;
@@ -198,66 +106,56 @@ export class UserService {
   }
 
   /**
-   * เปลี่ยนรหัสผ่าน
+   * นับจำนวนการแจ้งเตือนที่ยังไม่อ่าน
    */
-  public async changePassword(
-    userId: string,
-    currentPassword: string,
-    newPassword: string,
-  ): Promise<boolean> {
+  private async countUnreadNotifications(userId: string): Promise<number> {
     try {
-      // ค้นหาผู้ใช้ตาม ID
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
+      // ตรวจสอบว่ามีตาราง notification หรือไม่
+      const hasNotificationTable = await this.checkIfTableExists('notification');
+      
+      if (!hasNotificationTable) {
+        return 0; // ถ้าไม่มีตาราง ให้คืนค่า 0
       }
-
-      // ตรวจสอบรหัสผ่านปัจจุบัน
-      const isPasswordValid = await bcrypt.compare(
-        currentPassword,
-        user.password,
-      );
-
-      if (!isPasswordValid) {
-        throw new Error('Current password is incorrect');
+      
+      // นับจำนวนการแจ้งเตือนที่ยังไม่อ่าน
+      const result = await prisma.$queryRaw<CountResult[]>`
+        SELECT COUNT(*)::integer as count FROM notification 
+        WHERE user_id = ${userId} AND read = false
+      `;
+      
+      // ตรวจสอบผลลัพธ์และแปลงเป็น number ในทุกกรณี
+      if (result && result.length > 0) {
+        const countValue = result[0].count;
+        // แปลงค่าเป็น number ในทุกกรณี
+        return Number(countValue);
       }
-
-      // เข้ารหัสรหัสผ่านใหม่
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-      // อัพเดทรหัสผ่าน
-      await prisma.user.update({
-        where: { id: userId },
-        data: { password: hashedPassword },
-      });
-
-      logger.info('Changed user password', { userId });
-
-      return true;
+      
+      return 0;
     } catch (error) {
-      logger.error('Error changing password', error);
-      throw error;
+      logger.error('Error counting unread notifications', error);
+      return 0; // กรณีเกิดข้อผิดพลาด ให้คืนค่า 0
     }
   }
-
+  
   /**
-   * ลบผู้ใช้
+   * ตรวจสอบว่ามีตารางในฐานข้อมูลหรือไม่
    */
-  public async deleteUser(userId: string): Promise<boolean> {
+  private async checkIfTableExists(tableName: string): Promise<boolean> {
     try {
-      await prisma.user.delete({
-        where: { id: userId },
-      });
-
-      logger.info('Deleted user', { userId });
-
-      return true;
+      // สำหรับ PostgreSQL
+      interface TableResult {
+        table_name: string;
+      }
+      
+      const tables = await prisma.$queryRaw<TableResult[]>`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = ${tableName}
+      `;
+      
+      return tables.length > 0;
     } catch (error) {
-      logger.error('Error deleting user', error);
-      throw error;
+      logger.error(`Error checking if table ${tableName} exists`, error);
+      return false;
     }
   }
 
@@ -299,6 +197,7 @@ export class UserService {
             full_name: true,
             phone: true,
             role: true,
+            avatar: true,
             created_at: true,
             updated_at: true,
           },

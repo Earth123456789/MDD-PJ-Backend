@@ -3,66 +3,13 @@
 import { Request, Response } from 'express';
 import { DriverService } from '../services/driverService';
 import { logger } from '../utils/logger';
+import { getUserFromAuthService } from '../middlewares/authMiddleware';
+import axios from 'axios';
 
 const driverService = new DriverService();
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
 
 export class DriverController {
-  /**
-   * ลงทะเบียนคนขับใหม่
-   * @route POST /api/drivers/register
-   */
-  public async registerDriver(req: Request, res: Response): Promise<void> {
-    try {
-      const {
-        email,
-        password,
-        full_name,
-        phone,
-        license_number,
-        id_card_number,
-      } = req.body;
-
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!email || !password || !full_name || !phone || !license_number || !id_card_number) {
-        res.status(400).json({
-          success: false,
-          message: 'Missing required fields',
-        });
-        return;
-      }
-
-      // สร้างคนขับใหม่
-      const result = await driverService.registerDriver({
-        email,
-        password,
-        full_name,
-        phone,
-        license_number,
-        id_card_number,
-      });
-
-      res.status(201).json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      logger.error('Error registering driver', error);
-
-      if (error.message === 'Email already exists') {
-        res.status(409).json({
-          success: false,
-          message: 'Email already in use',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'An error occurred while registering driver',
-      });
-    }
-  }
-
   /**
    * สร้างข้อมูลคนขับสำหรับผู้ใช้ที่มีอยู่แล้ว
    * @route POST /api/drivers
@@ -80,6 +27,16 @@ export class DriverController {
         return;
       }
 
+      // ตรวจสอบว่าผู้ใช้มีอยู่ใน Auth Service หรือไม่
+      const userData = await getUserFromAuthService(user_id);
+      if (!userData) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found in Auth Service',
+        });
+        return;
+      }
+
       // สร้างข้อมูลคนขับ
       const driver = await driverService.createDriver({
         user_id,
@@ -88,28 +45,27 @@ export class DriverController {
         current_location,
       });
 
+      // อัพเดทบทบาทผู้ใช้ใน Auth Service ถ้าจำเป็น
+      if (userData.role !== 'driver') {
+        try {
+          await axios.patch(`${AUTH_SERVICE_URL}/api/users/${user_id}`, 
+            { role: 'driver' },
+            { headers: { 'Authorization': `Bearer ${process.env.SERVICE_TOKEN}` } }
+          );
+        } catch (error) {
+          logger.warn(`Failed to update user role in Auth Service: ${user_id}`, error);
+        }
+      }
+
       res.status(201).json({
         success: true,
-        data: driver,
+        data: {
+          ...driver,
+          user: userData
+        },
       });
     } catch (error: any) {
       logger.error('Error creating driver profile', error);
-
-      if (error.message === 'User not found') {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      if (error.message === 'User must have driver role') {
-        res.status(400).json({
-          success: false,
-          message: 'User must have driver role',
-        });
-        return;
-      }
 
       if (error.message === 'Driver profile already exists for this user') {
         res.status(409).json({
@@ -134,8 +90,8 @@ export class DriverController {
     try {
       const { id } = req.params;
 
-      // ดึงข้อมูลคนขับพร้อมข้อมูลผู้ใช้
-      const driver = await driverService.getDriverWithUserData(id);
+      // ดึงข้อมูลคนขับ
+      const driver = await driverService.getDriverById(id);
 
       if (!driver) {
         res.status(404).json({
@@ -145,9 +101,15 @@ export class DriverController {
         return;
       }
 
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const userData = await getUserFromAuthService(driver.user_id);
+
       res.status(200).json({
         success: true,
-        data: driver,
+        data: {
+          ...driver,
+          user: userData || { id: driver.user_id }
+        },
       });
     } catch (error) {
       logger.error('Error fetching driver by ID', error);
@@ -177,9 +139,15 @@ export class DriverController {
         return;
       }
 
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const userData = await getUserFromAuthService(userId);
+
       res.status(200).json({
         success: true,
-        data: driver,
+        data: {
+          ...driver,
+          user: userData || { id: userId }
+        },
       });
     } catch (error) {
       logger.error('Error fetching driver by user ID', error);
@@ -211,10 +179,16 @@ export class DriverController {
 
       // อัพเดทสถานะคนขับ
       const updatedDriver = await driverService.updateDriverStatus(id, status);
+      
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const userData = await getUserFromAuthService(updatedDriver.user_id);
 
       res.status(200).json({
         success: true,
-        data: updatedDriver,
+        data: {
+          ...updatedDriver,
+          user: userData || { id: updatedDriver.user_id }
+        },
       });
     } catch (error: any) {
       logger.error('Error updating driver status', error);
@@ -331,10 +305,16 @@ export class DriverController {
 
       // อัพเดทข้อมูลคนขับ
       const updatedDriver = await driverService.updateDriver(id, updateData);
+      
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const userData = await getUserFromAuthService(updatedDriver.user_id);
 
       res.status(200).json({
         success: true,
-        data: updatedDriver,
+        data: {
+          ...updatedDriver,
+          user: userData || { id: updatedDriver.user_id }
+        },
       });
     } catch (error: any) {
       logger.error('Error updating driver', error);
@@ -456,9 +436,20 @@ export class DriverController {
         limit: parseInt(limit as string),
       });
 
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const driversWithUserData = await Promise.all(
+        result.items.map(async (driver: any) => {
+          const userData = await getUserFromAuthService(driver.user_id);
+          return {
+            ...driver,
+            user: userData || { id: driver.user_id }
+          };
+        })
+      );
+
       res.status(200).json({
         success: true,
-        data: result.items,
+        data: driversWithUserData,
         pagination: result.pagination,
       });
     } catch (error) {
@@ -496,9 +487,20 @@ export class DriverController {
         parseFloat(radius as string),
       );
 
+      // ดึงข้อมูลผู้ใช้จาก Auth Service
+      const driversWithUserData = await Promise.all(
+        drivers.map(async (driver: any) => {
+          const userData = await getUserFromAuthService(driver.user_id);
+          return {
+            ...driver,
+            user: userData || { id: driver.user_id }
+          };
+        })
+      );
+
       res.status(200).json({
         success: true,
-        data: drivers,
+        data: driversWithUserData,
       });
     } catch (error) {
       logger.error('Error finding nearby drivers', error);

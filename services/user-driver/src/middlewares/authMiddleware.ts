@@ -3,11 +3,14 @@
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
+import axios from 'axios';
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
 
 interface DecodedToken {
-  userId: string;
+  id: string;
   email: string;
-  role: string;
+  role?: string;
   iat: number;
   exp: number;
 }
@@ -34,14 +37,18 @@ export const authMiddleware = (
 
     const token = authHeader.split(' ')[1];
 
-    // ตรวจสอบ token
+    // ตรวจสอบ token โดยใช้ JWT_SECRET เดียวกับ Auth Service
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || 'your-secret-key',
     ) as DecodedToken;
 
     // เพิ่มข้อมูลผู้ใช้ลงใน request
-    (req as any).user = decoded;
+    (req as any).user = {
+      userId: decoded.id,
+      email: decoded.email,
+      role: decoded.role || 'customer',
+    };
 
     // ไปยัง middleware หรือ controller ถัดไป
     next();
@@ -107,4 +114,31 @@ export const roleMiddleware = (roles: string[]) => {
       });
     }
   };
+};
+
+/**
+ * ฟังก์ชั่นสำหรับเรียกข้อมูลผู้ใช้จาก Auth Service
+ */
+export const getUserFromAuthService = async (userId: string): Promise<any> => {
+  try {
+    // ใช้ SERVICE_TOKEN ที่กำหนดใน .env สำหรับการสื่อสารระหว่าง service
+    const token = process.env.SERVICE_TOKEN;
+    
+    if (!token) {
+      logger.error('SERVICE_TOKEN is not defined in environment variables');
+      throw new Error('Service authentication failed');
+    }
+    
+    const response = await axios.get(`${AUTH_SERVICE_URL}/api/users/${userId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    logger.error('Error fetching user from Auth Service', error);
+    // ถ้าเกิดข้อผิดพลาด ส่งค่า null กลับไป เพื่อให้ service ยังทำงานต่อได้
+    return null;
+  }
 };

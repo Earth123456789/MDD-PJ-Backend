@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,28 +10,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AuthUser {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  password   String
-  provider   AuthProvider @default(LOCAL) // กำหนดว่ามาจาก Google หรือ Local
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  AuthToken  AuthToken[]
-}
-
-model AuthToken {
-  id         String   @id @default(uuid())
-  userId     String   
-  token      String   @unique
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  AuthUser   AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 enum AuthProvider {
   LOCAL
   GOOGLE
+  FACEBOOK
+}
+
+model AuthUser {
+  id        String       @id @default(uuid())
+  email     String       @unique
+  password  String
+  fullName  String?
+  avatar    String?
+  phone     String?
+  provider  AuthProvider @default(LOCAL)
+  role      String       @default("customer")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  
+  // สำหรับเก็บการแจ้งเตือน
+  notificationCount Int @default(0)
+  
+  tokens    AuthToken[]
+}
+
+model AuthToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      AuthUser @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }

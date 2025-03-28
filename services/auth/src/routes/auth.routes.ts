@@ -1,72 +1,17 @@
 import { Router } from "express";
-import { register, login } from "../controllers/auth.controller";
+import { register, login, refreshToken } from "../controllers/auth.controller";
 import { publishMessage } from "../config/rabbitmq";
 import { validate } from "../middleware/validate";
-import { registerSchema, loginSchema } from "../validators/auth.validators";
+import { registerSchema, loginSchema, refreshTokenSchema } from "../validators/auth.validators";
+import { authenticateJWT } from "../middleware/auth.middleware";
 
 const router = Router();
-
-import passport from "passport";
-import jwt from "jsonwebtoken";
-
-// เริ่มต้น OAuth
-router.get(
-  "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] }),
-);
-
-// Callback จาก Google
-router.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    session: false,
-    failureRedirect: "/api/auth/google/fail",
-  }),
-  async (req, res) => {
-    const user = req.user as any;
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: "1h" },
-    );
-
-    // ✅ ส่ง Event ไปที่ RabbitMQ
-    try {
-      await publishMessage("auth_service_events", {
-        event: "USER_REGISTERED",
-        data: {
-          id: user.id,
-          email: user.email,
-          provider: "GOOGLE",
-        },
-      });
-    } catch (error) {
-      console.error("Error publishing Google login event:", error);
-    }
-
-    // ✅ ส่งกลับเป็น JSON
-    res.json({
-      message: "Google login successful",
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-      },
-    });
-  },
-);
-
-// optional: ถ้า fail
-router.get("/google/fail", (req, res) => {
-  res.status(401).json({ message: "Google Login Failed" });
-});
 
 /**
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Register a new user
+ *     summary: ลงทะเบียนผู้ใช้ใหม่
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -81,11 +26,17 @@ router.get("/google/fail", (req, res) => {
  *               password:
  *                 type: string
  *                 minLength: 8
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [customer, driver, admin]
+ *                 default: customer
  *     responses:
  *       201:
- *         description: User registered successfully
+ *         description: ลงทะเบียนสำเร็จ
  *       400:
- *         description: Invalid input or email already exists
+ *         description: ข้อมูลไม่ถูกต้องหรืออีเมลมีอยู่แล้ว
  */
 router.post("/register", validate(registerSchema), register);
 
@@ -93,7 +44,7 @@ router.post("/register", validate(registerSchema), register);
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Login user
+ *     summary: เข้าสู่ระบบ
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -108,17 +59,40 @@ router.post("/register", validate(registerSchema), register);
  *                 type: string
  *     responses:
  *       200:
- *         description: User logged in successfully
+ *         description: เข้าสู่ระบบสำเร็จ
  *       400:
- *         description: Invalid credentials
+ *         description: ข้อมูลไม่ถูกต้อง
  */
 router.post("/login", validate(loginSchema), login);
 
 /**
  * @swagger
+ * /api/auth/refresh-token:
+ *   post:
+ *     summary: ต่ออายุ JWT token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: ได้รับ token ใหม่
+ *       401:
+ *         description: Refresh token ไม่ถูกต้องหรือหมดอายุ
+ */
+router.post("/refresh-token", validate(refreshTokenSchema), refreshToken);
+
+/**
+ * @swagger
  * /api/auth/send-event:
  *   post:
- *     summary: Send event to RabbitMQ
+ *     summary: ส่ง event ไปยัง RabbitMQ
  *     tags: [RabbitMQ]
  *     requestBody:
  *       required: true
@@ -133,7 +107,7 @@ router.post("/login", validate(loginSchema), login);
  *                 type: object
  *     responses:
  *       200:
- *         description: Event sent to RabbitMQ
+ *         description: ส่ง event สำเร็จ
  */
 router.post("/send-event", async (req, res) => {
   try {

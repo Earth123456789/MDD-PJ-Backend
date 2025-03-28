@@ -2,104 +2,28 @@
 
 import express from 'express';
 import { UserController } from '../controllers/userController';
-import { authMiddleware } from '../middlewares/authMiddleware';
+import { authMiddleware, roleMiddleware } from '../middlewares/authMiddleware';
 
 const router = express.Router();
 const userController = new UserController();
 
 /**
  * @swagger
- * /users/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *               - full_name
- *               - phone
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *               full_name:
- *                 type: string
- *               phone:
- *                 type: string
- *               role:
- *                 type: string
- *                 enum: [customer, driver, admin]
- *                 default: customer
- *     responses:
- *       201:
- *         description: User created successfully
- *       400:
- *         description: Invalid input data
- *       409:
- *         description: Email already in use
- *       500:
- *         description: Server error
- */
-router.post('/register', userController.registerUser);
-
-/**
- * @swagger
- * /users/login:
- *   post:
- *     summary: User login
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *     responses:
- *       200:
- *         description: Login successful
- *       401:
- *         description: Invalid email or password
- *       500:
- *         description: Server error
- */
-router.post('/login', userController.login);
-
-/**
- * @swagger
  * /users/me:
  *   get:
- *     summary: Get current user profile
+ *     summary: ดึงข้อมูลผู้ใช้ปัจจุบัน
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: User profile
+ *         description: ข้อมูลผู้ใช้
  *       401:
- *         description: Unauthorized
+ *         description: ไม่ได้รับอนุญาต
  *       404:
- *         description: User not found
+ *         description: ไม่พบผู้ใช้
  *       500:
- *         description: Server error
+ *         description: ข้อผิดพลาดของเซิร์ฟเวอร์
  */
 router.get('/me', authMiddleware, userController.getCurrentUser);
 
@@ -107,7 +31,7 @@ router.get('/me', authMiddleware, userController.getCurrentUser);
  * @swagger
  * /users/{id}:
  *   get:
- *     summary: Get user by ID
+ *     summary: ดึงข้อมูลผู้ใช้ตาม ID
  *     tags: [Users]
  *     parameters:
  *       - in: path
@@ -118,11 +42,11 @@ router.get('/me', authMiddleware, userController.getCurrentUser);
  *         description: User ID
  *     responses:
  *       200:
- *         description: User details
+ *         description: ข้อมูลผู้ใช้
  *       404:
- *         description: User not found
+ *         description: ไม่พบผู้ใช้
  *       500:
- *         description: Server error
+ *         description: ข้อผิดพลาดของเซิร์ฟเวอร์
  */
 router.get('/:id', userController.getUserById);
 
@@ -130,7 +54,7 @@ router.get('/:id', userController.getUserById);
  * @swagger
  * /users/{id}:
  *   patch:
- *     summary: Update user profile
+ *     summary: อัพเดทข้อมูลผู้ใช้
  *     tags: [Users]
  *     parameters:
  *       - in: path
@@ -150,96 +74,31 @@ router.get('/:id', userController.getUserById);
  *                 type: string
  *               phone:
  *                 type: string
- *               email:
+ *               avatar:
  *                 type: string
- *                 format: email
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: User updated successfully
+ *         description: อัพเดทข้อมูลผู้ใช้สำเร็จ
  *       400:
- *         description: Invalid input data
+ *         description: ข้อมูลไม่ถูกต้อง
+ *       401:
+ *         description: ไม่ได้รับอนุญาต
+ *       403:
+ *         description: ไม่มีสิทธิ์เข้าถึง
  *       404:
- *         description: User not found
- *       409:
- *         description: Email already in use
+ *         description: ไม่พบผู้ใช้
  *       500:
- *         description: Server error
+ *         description: ข้อผิดพลาดของเซิร์ฟเวอร์
  */
 router.patch('/:id', authMiddleware, userController.updateUser);
 
 /**
  * @swagger
- * /users/{id}/change-password:
- *   post:
- *     summary: Change user password
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - current_password
- *               - new_password
- *             properties:
- *               current_password:
- *                 type: string
- *                 format: password
- *               new_password:
- *                 type: string
- *                 format: password
- *     responses:
- *       200:
- *         description: Password changed successfully
- *       400:
- *         description: Invalid input data
- *       401:
- *         description: Current password is incorrect
- *       404:
- *         description: User not found
- *       500:
- *         description: Server error
- */
-router.post(
-  '/:id/change-password',
-  authMiddleware,
-  userController.changePassword,
-);
-
-/**
- * @swagger
- * /users/{id}:
- *   delete:
- *     summary: Delete user
- *     tags: [Users]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *     responses:
- *       200:
- *         description: User deleted successfully
- *       500:
- *         description: Server error
- */
-router.delete('/:id', authMiddleware, userController.deleteUser);
-
-/**
- * @swagger
  * /users:
  *   get:
- *     summary: Search users
+ *     summary: ค้นหาผู้ใช้ (สำหรับแอดมินเท่านั้น)
  *     tags: [Users]
  *     parameters:
  *       - in: query
@@ -247,30 +106,55 @@ router.delete('/:id', authMiddleware, userController.deleteUser);
  *         schema:
  *           type: string
  *           enum: [customer, driver, admin]
- *         description: Filter by user role
+ *         description: กรองตามบทบาทผู้ใช้
  *       - in: query
  *         name: query
  *         schema:
  *           type: string
- *         description: Search term (email, name, phone)
+ *         description: คำค้นหา (อีเมล, ชื่อ, โทรศัพท์)
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
  *           default: 1
- *         description: Page number
+ *         description: หน้า
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Items per page
+ *         description: จำนวนรายการต่อหน้า
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of users
+ *         description: รายการผู้ใช้
+ *       401:
+ *         description: ไม่ได้รับอนุญาต
+ *       403:
+ *         description: ไม่มีสิทธิ์เข้าถึง
  *       500:
- *         description: Server error
+ *         description: ข้อผิดพลาดของเซิร์ฟเวอร์
  */
-router.get('/', userController.searchUsers);
+router.get('/', authMiddleware, roleMiddleware(['admin']), userController.searchUsers);
+
+/**
+ * @swagger
+ * /users/{id}/change-password:
+ *   post:
+ *     summary: เปลี่ยนรหัสผ่าน (ถูกย้ายไป Auth Service)
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       405:
+ *         description: ไม่รองรับการทำงานนี้ กรุณาใช้ Auth Service
+ */
+router.post('/:id/change-password', authMiddleware, userController.changePassword);
 
 export default router;

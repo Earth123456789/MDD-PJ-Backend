@@ -4,15 +4,22 @@ import dotenv from "dotenv";
 import { setupSwagger } from "./config/swagger";
 import { connectRabbitMQ, closeRabbitMQConnection } from "./config/rabbitmq";
 import authRoutes from "./routes/auth.routes";
+import userRoutes from "./routes/user.routes"; 
 import { logger } from "./utils/logger";
 import passport from "passport";
-import "./config/google.strategy"; // ✅ นำเข้า Strategy
 
 dotenv.config();
 
+// ตรวจสอบ JWT_SECRET
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in .env");
+}
+
+// ตรวจสอบ JWT_REFRESH_SECRET
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+if (!JWT_REFRESH_SECRET) {
+  throw new Error("JWT_REFRESH_SECRET is not defined in .env");
 }
 
 const app = express();
@@ -28,6 +35,7 @@ setupSwagger(app);
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

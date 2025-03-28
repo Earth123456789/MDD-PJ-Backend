@@ -1,8 +1,7 @@
 // user-driver-service/prisma/schema.prisma
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -10,37 +9,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id         String    @id @default(uuid())
-  email      String    @unique
-  password   String
-  full_name  String
-  phone      String
-  role       UserRole
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-}
-
-enum UserRole {
-  customer
-  driver
-  admin
-}
-
 model Driver {
-  id              String      @id @default(uuid())
-  user_id         String      @unique
+  id              String    @id @default(uuid())
+  user_id         String    @unique
   license_number  String
   id_card_number  String
   current_location Json?
-  rating          Float       @default(0)
-  status          DriverStatus
-  created_at      DateTime    @default(now())
-  updated_at      DateTime    @updatedAt
+  status          String    @default("inactive")
+  rating          Float     @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  vehicles        Vehicle[]
 }
 
-enum DriverStatus {
-  active
-  inactive
-  suspended
+model Vehicle {
+  id             String   @id @default(uuid())
+  driver_id      String
+  model          String
+  license_plate  String
+  color          String
+  year           Int?
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  driver         Driver   @relation(fields: [driver_id], references: [id])
 }

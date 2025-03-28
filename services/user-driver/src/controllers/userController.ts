@@ -8,106 +8,6 @@ const userService = new UserService();
 
 export class UserController {
   /**
-   * ลงทะเบียนผู้ใช้ใหม่
-   * @route POST /api/users/register
-   */
-  public async registerUser(req: Request, res: Response): Promise<void> {
-    try {
-      const { email, password, full_name, phone, role } = req.body;
-
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!email || !password || !full_name || !phone) {
-        res.status(400).json({
-          success: false,
-          message: 'Missing required fields',
-        });
-        return;
-      }
-
-      // ตรวจสอบบทบาท
-      const validRoles = ['customer', 'driver', 'admin'];
-      if (role && !validRoles.includes(role)) {
-        res.status(400).json({
-          success: false,
-          message: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
-        });
-        return;
-      }
-
-      // สร้างผู้ใช้ใหม่
-      const newUser = await userService.createUser({
-        email,
-        password,
-        full_name,
-        phone,
-        role: role || 'customer',
-      });
-
-      res.status(201).json({
-        success: true,
-        data: newUser,
-      });
-    } catch (error: any) {
-      logger.error('Error registering user', error);
-
-      if (error.message === 'Email already exists') {
-        res.status(409).json({
-          success: false,
-          message: 'Email already in use',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'An error occurred while registering user',
-      });
-    }
-  }
-
-  /**
-   * เข้าสู่ระบบ
-   * @route POST /api/users/login
-   */
-  public async login(req: Request, res: Response): Promise<void> {
-    try {
-      const { email, password } = req.body;
-
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!email || !password) {
-        res.status(400).json({
-          success: false,
-          message: 'Email and password are required',
-        });
-        return;
-      }
-
-      // ดำเนินการเข้าสู่ระบบ
-      const loginResult = await userService.login(email, password);
-
-      res.status(200).json({
-        success: true,
-        data: loginResult,
-      });
-    } catch (error: any) {
-      logger.error('Error during login', error);
-
-      if (error.message === 'Invalid email or password') {
-        res.status(401).json({
-          success: false,
-          message: 'Invalid email or password',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'An error occurred during login',
-      });
-    }
-  }
-
-  /**
    * ดึงข้อมูลผู้ใช้ปัจจุบัน
    * @route GET /api/users/me
    */
@@ -156,7 +56,7 @@ export class UserController {
     try {
       const { id } = req.params;
 
-      // ดึงข้อมูลผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
+      // ดึงข้อมูลผู้ใช้
       const user = await userService.getUserById(id);
 
       if (!user) {
@@ -187,10 +87,22 @@ export class UserController {
   public async updateUser(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { full_name, phone, email } = req.body;
+      const { full_name, phone, avatar } = req.body; // เพิ่ม avatar กลับมา
+
+      // ตรวจสอบสิทธิ์ - ผู้ใช้ต้องอัพเดทข้อมูลตัวเองเท่านั้น หรือเป็นแอดมิน
+      const currentUserId = (req as any).user?.userId;
+      const userRole = (req as any).user?.role;
+      
+      if (currentUserId !== id && userRole !== 'admin') {
+        res.status(403).json({
+          success: false,
+          message: 'You can only update your own profile',
+        });
+        return;
+      }
 
       // ตรวจสอบว่ามีข้อมูลที่จะอัพเดทหรือไม่
-      if (!full_name && !phone && !email) {
+      if (!full_name && !phone && !avatar) {
         res.status(400).json({
           success: false,
           message: 'No data to update',
@@ -202,9 +114,9 @@ export class UserController {
       const updateData: any = {};
       if (full_name) updateData.full_name = full_name;
       if (phone) updateData.phone = phone;
-      if (email) updateData.email = email;
+      if (avatar) updateData.avatar = avatar;
 
-      // อัพเดทข้อมูลผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
+      // อัพเดทข้อมูลผู้ใช้
       const updatedUser = await userService.updateUser(id, updateData);
 
       res.status(200).json({
@@ -222,14 +134,6 @@ export class UserController {
         return;
       }
 
-      if (error.message === 'Email already exists') {
-        res.status(409).json({
-          success: false,
-          message: 'Email already in use',
-        });
-        return;
-      }
-
       res.status(500).json({
         success: false,
         message: 'An error occurred while updating user',
@@ -238,80 +142,20 @@ export class UserController {
   }
 
   /**
-   * เปลี่ยนรหัสผ่าน
+   * เปลี่ยนรหัสผ่าน - ใช้ Auth Service แทน
    * @route POST /api/users/:id/change-password
    */
   public async changePassword(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const { current_password, new_password } = req.body;
-
-      // ตรวจสอบข้อมูลที่จำเป็น
-      if (!current_password || !new_password) {
-        res.status(400).json({
-          success: false,
-          message: 'Current password and new password are required',
-        });
-        return;
-      }
-
-      // เปลี่ยนรหัสผ่าน (ไม่ต้องแปลงเป็น number อีกต่อไป)
-      const result = await userService.changePassword(
-        id,
-        current_password,
-        new_password,
-      );
-
-      res.status(200).json({
-        success: true,
-        message: 'Password changed successfully',
-      });
-    } catch (error: any) {
-      logger.error('Error changing password', error);
-
-      if (error.message === 'User not found') {
-        res.status(404).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
-      }
-
-      if (error.message === 'Current password is incorrect') {
-        res.status(401).json({
-          success: false,
-          message: 'Current password is incorrect',
-        });
-        return;
-      }
-
-      res.status(500).json({
+      res.status(405).json({
         success: false,
-        message: 'An error occurred while changing password',
-      });
-    }
-  }
-
-  /**
-   * ลบผู้ใช้
-   * @route DELETE /api/users/:id
-   */
-  public async deleteUser(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      // ลบผู้ใช้ (ไม่ต้องแปลงเป็น number อีกต่อไป)
-      await userService.deleteUser(id);
-
-      res.status(200).json({
-        success: true,
-        message: 'User deleted successfully',
+        message: 'This operation is not supported. Please use Auth Service to change password.',
       });
     } catch (error) {
-      logger.error('Error deleting user', error);
+      logger.error('Error in change password endpoint', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while deleting user',
+        message: 'Internal server error',
       });
     }
   }
@@ -323,6 +167,17 @@ export class UserController {
   public async searchUsers(req: Request, res: Response): Promise<void> {
     try {
       const { role, query, page = '1', limit = '10' } = req.query;
+
+      // ตรวจสอบสิทธิ์ - เฉพาะแอดมินเท่านั้น
+      const userRole = (req as any).user?.role;
+      
+      if (userRole !== 'admin') {
+        res.status(403).json({
+          success: false,
+          message: 'Only admin can search users',
+        });
+        return;
+      }
 
       // ค้นหาผู้ใช้
       const result = await userService.searchUsers({

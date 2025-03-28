@@ -3,10 +3,8 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { publishMessage } from '../config/rabbitmq';
-import { UserService } from './userService';
 
 const prisma = new PrismaClient();
-const userService = new UserService();
 
 interface DriverCreateInput {
   user_id: string;
@@ -29,35 +27,12 @@ interface DriverUpdateInput {
   rating?: number;
 }
 
-interface DriverRegistrationInput {
-  email: string;
-  password: string;
-  full_name: string;
-  phone: string;
-  license_number: string;
-  id_card_number: string;
-}
-
 export class DriverService {
   /**
    * สร้างข้อมูลคนขับใหม่
    */
   public async createDriver(data: DriverCreateInput): Promise<any> {
     try {
-      // ตรวจสอบว่ามีผู้ใช้อยู่ในระบบหรือไม่
-      const user = await prisma.user.findUnique({
-        where: { id: data.user_id },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      // ตรวจสอบว่าผู้ใช้มีบทบาทเป็นคนขับหรือไม่
-      if (user.role !== 'driver') {
-        throw new Error('User must have driver role');
-      }
-
       // ตรวจสอบว่ามีข้อมูลคนขับอยู่แล้วหรือไม่
       const existingDriver = await prisma.driver.findUnique({
         where: { user_id: data.user_id },
@@ -105,42 +80,6 @@ export class DriverService {
   }
 
   /**
-   * ลงทะเบียนคนขับใหม่ (สร้างทั้งผู้ใช้และข้อมูลคนขับ)
-   */
-  public async registerDriver(data: DriverRegistrationInput): Promise<any> {
-    try {
-      // สร้างผู้ใช้ใหม่ด้วยบทบาทเป็นคนขับ
-      const newUser = await userService.createUser({
-        email: data.email,
-        password: data.password,
-        full_name: data.full_name,
-        phone: data.phone,
-        role: 'driver',
-      });
-
-      // สร้างข้อมูลคนขับ
-      const newDriver = await this.createDriver({
-        user_id: newUser.id,
-        license_number: data.license_number,
-        id_card_number: data.id_card_number,
-      });
-
-      logger.info('Registered new driver', {
-        driverId: newDriver.id,
-        userId: newUser.id,
-      });
-
-      return {
-        user: newUser,
-        driver: newDriver,
-      };
-    } catch (error) {
-      logger.error('Error registering driver', error);
-      throw error;
-    }
-  }
-
-  /**
    * ดึงข้อมูลคนขับตาม ID
    */
   public async getDriverById(driverId: string): Promise<any> {
@@ -176,31 +115,6 @@ export class DriverService {
       return driver;
     } catch (error) {
       logger.error('Error fetching driver by user ID', error);
-      throw error;
-    }
-  }
-
-  /**
-   * ดึงข้อมูลคนขับพร้อมข้อมูลผู้ใช้
-   */
-  public async getDriverWithUserData(driverId: string): Promise<any> {
-    try {
-      const driver = await prisma.driver.findUnique({
-        where: { id: driverId },
-      });
-
-      if (!driver) {
-        return null;
-      }
-
-      const userData = await userService.getUserById(driver.user_id);
-
-      return {
-        ...driver,
-        user: userData,
-      };
-    } catch (error) {
-      logger.error('Error fetching driver with user data', error);
       throw error;
     }
   }
@@ -382,37 +296,12 @@ export class DriverService {
         where.status = status;
       }
 
-      // สำหรับการค้นหาคนขับ เราต้องดึงข้อมูลผู้ใช้ด้วย
-      // แต่ Prisma ไม่สามารถค้นหาข้ามตารางได้โดยตรง
-      // เราจะใช้วิธีค้นหาข้อมูลผู้ใช้ก่อน แล้วจึงค้นหาข้อมูลคนขับตาม user_id
-
-      let userIds: string[] = [];
-
       if (query) {
-        // ค้นหาผู้ใช้ที่มีบทบาทเป็นคนขับและข้อมูลตรงกับคำค้นหา
-        const users = await prisma.user.findMany({
-          where: {
-            role: 'driver',
-            OR: [
-              { email: { contains: query, mode: 'insensitive' } },
-              { full_name: { contains: query, mode: 'insensitive' } },
-              { phone: { contains: query } },
-            ],
-          },
-          select: { id: true },
-        });
-
-        userIds = users.map(user => user.id);
-
-        if (userIds.length > 0) {
-          where.user_id = { in: userIds };
-        } else if (query) {
-          // ถ้าไม่พบผู้ใช้ แต่มีคำค้นหา ให้ค้นหาในข้อมูลคนขับ
-          where.OR = [
-            { license_number: { contains: query } },
-            { id_card_number: { contains: query } },
-          ];
-        }
+        // ค้นหาในข้อมูลคนขับโดยตรง
+        where.OR = [
+          { license_number: { contains: query } },
+          { id_card_number: { contains: query } },
+        ];
       }
 
       // ค้นหาคนขับและนับจำนวนทั้งหมด
@@ -426,21 +315,10 @@ export class DriverService {
         prisma.driver.count({ where }),
       ]);
 
-      // ดึงข้อมูลผู้ใช้สำหรับคนขับที่พบ
-      const driverWithUserData = await Promise.all(
-        drivers.map(async (driver) => {
-          const userData = await userService.getUserById(driver.user_id);
-          return {
-            ...driver,
-            user: userData,
-          };
-        }),
-      );
-
       const totalPages = Math.ceil(totalCount / limit);
 
       return {
-        items: driverWithUserData,
+        items: drivers,
         pagination: {
           total: totalCount,
           page,
